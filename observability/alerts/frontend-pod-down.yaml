@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: boutique-custom-alerts
+  namespace: observability
+  labels:
+    release: monitoring
+
+spec:
+  groups:
+    - name: boutique.rules
+      rules:
+        - alert: FrontendPodDown
+          expr: kube_deployment_status_replicas_available{deployment="frontend",namespace="boutique"} < 1
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Frontend deployment is unavailable"
+            description: "No frontend replicas are available."

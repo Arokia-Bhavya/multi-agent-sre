@@ -1,0 +1,224 @@
+# Trims the "full" opentelemetry-demo profile down to what this project needs,
+# so the Kind node doesn't get memory-overcommitted.
+#
+# Disables: kafka, opensearch (+ its headless svc) — plus the components
+# that are useless without kafka:
+#   - accounting        (kafka consumer only; no purpose with kafka disabled)
+#   - fraud-detection   (kafka consumer only; no purpose with kafka disabled)
+#
+# Note: `llm` and `product-reviews` were dropped from the chart's
+# components schema in newer chart releases (values.schema.json no longer
+# lists them), so they're simply absent here rather than disabled.
+#
+# postgresql stays ENABLED: product-catalog (src/product-catalog/main.go)
+# hard-requires it — initDatabase() calls os.Exit(1) on connection failure,
+# with no in-memory/JSON fallback in this version of the chart. Disabling it
+# takes down a core storefront path, not just an optional add-on.
+#
+# checkout only skips Kafka publishing if KAFKA_ADDR is unset — with kafka
+# disabled but KAFKA_ADDR still pointing at "kafka:9092", it creates a
+# producer against an address that doesn't exist and panics (nil pointer
+# deref in sendToPostProcessor) the first time an order is placed. So we
+# blank KAFKA_ADDR via envOverrides (upserts into the default env list
+# rather than replacing it) and drop the wait-for-kafka initContainer that
+# would otherwise block the pod forever.
+#
+# Apply at install time (or reinstall, since this chart doesn't support
+# in-place version upgrades):
+#   helm install otel-demo open-telemetry/opentelemetry-demo \
+#     --namespace otel-demo --create-namespace \
+#     --values observability/helm/otel-demo-minimal-values.yaml
+#
+# Everything the storefront actually needs (frontend, frontend-proxy, cart,
+# checkout, currency, email, payment, product-catalog, quote, recommendation,
+# shipping, ad, image-provider, load-generator, flagd/flagd-ui, valkey-cart,
+# postgresql, otel-collector, jaeger, prometheus, grafana) stays enabled.
+
+prometheus:
+  # The chart does NOT auto-wire Prometheus's `alerting:` config to the
+  # alertmanager subchart just because alertmanager.enabled: true — verified
+  # via `curl localhost:9090/api/v1/status/config`, which came back with no
+  # `alerting:` block at all. Points explicitly at the alertmanager
+  # subchart's Service (default name `<release-name>-alertmanager`, i.e.
+  # `otel-demo-alertmanager` for a release named `otel-demo`; confirm with
+  # `kubectl get svc -n otel-demo | grep alertmanager` and adjust if
+  # different).
+  server:
+    alertmanagers:
+      - static_configs:
+          - targets:
+              - otel-demo-alertmanager:9093
+  serverFiles:
+    alerting_rules.yml:
+      groups:
+        - name: otel-demo-application
+          rules:
+            - alert: FrontendHighErrorRate
+              expr: |
+                (
+                  sum(rate(http_server_duration_milliseconds_count{service_name="frontend",http_status_code=~"5.."}[5m]))
+                  /
+                  sum(rate(http_server_duration_milliseconds_count{service_name="frontend"}[5m]))
+                ) > 0.05
+              for: 2m
+              labels:
+                severity: warning
+                service: frontend
+              annotations:
+                summary: "Frontend error rate is above 5%"
+                description: "More than 5% of frontend requests returned a 5xx response for two minutes."
+
+            - alert: FrontendHighLatency
+              expr: |
+                histogram_quantile(
+                  0.95,
+                  sum by (le) (
+                    rate(http_server_duration_milliseconds_bucket{service_name="frontend"}[5m])
+                  )
+                ) > 3000
+              for: 3m
+              labels:
+                severity: warning
+                service: frontend
+              annotations:
+                summary: "Frontend p95 latency is above 3 seconds"
+                description: "The frontend p95 request latency exceeded 3 seconds for three minutes."
+
+            - alert: FrontendHighMemoryUsage
+              expr: |
+                sum by (pod, container) (
+                  container_memory_working_set_bytes{namespace="otel-demo",container="frontend"}
+                ) > 209715200
+              for: 5m
+              labels:
+                severity: warning
+                service: frontend
+              annotations:
+                summary: "Frontend memory usage is above 200 MiB"
+                description: "A frontend container used more than 200 MiB of working-set memory for five minutes."
+
+            # Fires when the product-catalog container stops reporting its
+            # resource metrics entirely (scaled to 0, crash-looping so badly
+            # cAdvisor never gets a sample, or otherwise gone) — uses
+            # absent() over container_memory_usage_bytes{container="product-catalog"},
+            # confirmed directly against this cluster's actual cAdvisor
+            # output (metric name/label verified via Prometheus API query;
+            # metrics_agent.py's docstring claims container_memory_usage_total_bytes
+            # / container_name, which do NOT exist here — see note in
+            # ai-platform/tools/metrics_agent.py, needs its own fix).
+            # kube_deployment_status_replicas_available isn't usable instead
+            # since this chart doesn't run kube-state-metrics.
+            - alert: ProductCatalogPodDown
+              expr: |
+                absent(container_memory_usage_bytes{namespace="otel-demo",container="product-catalog"})
+              for: 1m
+              labels:
+                severity: critical
+                service: product-catalog
+              annotations:
+                summary: "product-catalog pod is down"
+                description: "No product-catalog container is reporting metrics — it may be scaled to 0 or crash-looping."
+
+  # The opentelemetry-demo chart's own values.yaml sets
+  # prometheus.alertmanager.enabled: false by default (everything here runs
+  # inside the otel-demo namespace, there's no separate kube-prometheus-stack
+  # release). Turning it on so firing alerts actually get routed somewhere,
+  # and pointing it at the copilot web UI's webhook for auto-triage
+  # (ai-platform/webui/auto_responder.py). No auth: local kind demo cluster.
+  #
+  # Connectivity note: the web UI (`ai-platform/webui/server.py`) runs as a
+  # local process on the host, not as a cluster workload, so Alertmanager
+  # (inside the kind cluster) needs a route back to the host:
+  #   - Docker Desktop (macOS/Windows): host.docker.internal resolves from
+  #     inside kind nodes out of the box — the URL below works as-is.
+  #   - Linux/other Docker setups: host.docker.internal may not resolve; use
+  #     the docker bridge gateway IP instead (`ip addr show docker0`,
+  #     typically 172.17.0.1).
+  alertmanager:
+    enabled: true
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        receiver: sre-copilot-webhook
+        group_by: ["alertname", "service"]
+        group_wait: 10s
+        group_interval: 30s
+        repeat_interval: 30m
+      receivers:
+        - name: sre-copilot-webhook
+          webhook_configs:
+            - url: "http://host.docker.internal:8000/api/webhook/alertmanager"
+              send_resolved: true
+
+components:
+  kafka:
+    enabled: false
+  accounting:
+    enabled: false
+  fraud-detection:
+    enabled: false
+  checkout:
+    initContainers: []
+    envOverrides:
+      - name: KAFKA_ADDR
+        value: ""
+  # flagd-ui (Elixir/Phoenix) OOMKilled repeatedly at 250Mi/400Mi/600Mi,
+  # always within ~20-30s of every `helm upgrade --reuse-values` we ran.
+  # Diagnosed by overriding its command to `sleep` so it wouldn't
+  # crash-loop, then execing in and launching /app/bin/server manually in
+  # isolation, minutes after the cluster had settled: it started cleanly
+  # and cgroup memory.peak topped out at ~182MiB (190693376 bytes) — well
+  # under even the chart's original 250Mi default. So the app itself is
+  # not the problem. Every real OOM happened immediately after a broad
+  # `helm upgrade --reuse-values`, which restarts several deployments at
+  # once — the actual cause was transient node-wide memory contention
+  # during those simultaneous restarts, not flagd-ui's steady-state need.
+  # ERL_FLAGS caps BEAM scheduler count as a low-cost safety margin (rules
+  # out one class of container-CPU-count-driven overhead); the memory
+  # limit gets a comfortable buffer over the observed 182MiB peak rather
+  # than the bare chart default, since we're not going to precisely
+  # reproduce that contention window every time.
+  flagd:
+    sidecarContainers:
+      - name: flagd-ui
+        useDefault:
+          env: true
+        service:
+          port: 4000
+        env:
+          - name: FLAGD_METRICS_EXPORTER
+            value: otel
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: http://$(OTEL_COLLECTOR_NAME):4318
+          - name: FLAGD_UI_PORT
+            value: "4000"
+          - name: SECRET_KEY_BASE
+            value: yYrECL4qbNwleYInGJYvVnSkwJuSQJ4ijPTx5tirGUXrbznFIBFVJdPl5t6O9ASw
+          - name: PHX_HOST
+            value: localhost
+          - name: ERL_FLAGS
+            value: "+S 2:2 +sbwt none +sbwtdcpu none +sbwtdio none"
+        resources:
+          limits:
+            memory: 300Mi
+          requests:
+            memory: 100Mi
+        volumeMounts:
+          - name: config-rw
+            mountPath: /app/data
+        sidecarContainers: []
+    
+
+opensearch:
+  enabled: false
+
+# The collector's logs pipeline exports to opensearch by default; with
+# opensearch disabled that export would just retry/fail forever, so point
+# the logs pipeline at debug only.
+opentelemetry-collector:
+  config:
+    service:
+      pipelines:
+        logs:
+          exporters: [debug]

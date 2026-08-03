@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI SRE Copilot</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8ee;
+    --muted: #8a90a2;
+    --accent: #5b8def;
+    --danger: #e5534b;
+    --ok: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+  }
+  #app { display: flex; width: 100%; height: 100%; }
+  #dashboard {
+    width: 300px;
+    min-width: 300px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #dashboard .dash-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #dashboard .dash-header h2 { font-size: 13px; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  #dashboard .refresh-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  #dashboard .refresh-btn:hover { color: var(--text); border-color: var(--muted); }
+  #alertList, #incidentList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #incidentsSection {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+  }
+  .incident-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--muted);
+    cursor: pointer;
+  }
+  .incident-card:hover { border-color: var(--accent); }
+  .incident-card.selected { border-color: var(--accent); }
+  .incident-card.investigating { border-left-color: #d29922; }
+  .incident-card.awaiting_approval { border-left-color: var(--danger); }
+  .incident-card.completed { border-left-color: var(--ok); }
+  .incident-card.error { border-left-color: var(--danger); }
+  .incident-card.resolved { border-left-color: var(--muted); }
+  .badge.investigating { background: rgba(210,153,34,0.18); color: #d29922; }
+  .badge.awaiting_approval { background: rgba(229,83,75,0.18); color: var(--danger); }
+  .badge.completed { background: rgba(63,185,80,0.18); color: var(--ok); }
+  .badge.error { background: rgba(229,83,75,0.18); color: var(--danger); }
+  .badge.resolved { background: rgba(138,144,162,0.18); color: var(--muted); }
+  .alert-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--muted);
+  }
+  .alert-card.firing { border-left-color: var(--danger); }
+  .alert-card.pending { border-left-color: #d29922; }
+  .alert-card.inactive { border-left-color: var(--ok); }
+  .alert-card .name { font-size: 13px; font-weight: 600; }
+  .alert-card .meta { font-size: 11px; color: var(--muted); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .badge.firing { background: rgba(229,83,75,0.18); color: var(--danger); }
+  .badge.pending { background: rgba(210,153,34,0.18); color: #d29922; }
+  .badge.inactive { background: rgba(63,185,80,0.18); color: var(--ok); }
+  .alert-card .summary { font-size: 12px; color: var(--text); margin-top: 6px; }
+  #alertList .empty, #alertList .error { color: var(--muted); font-size: 12px; padding: 10px; }
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .thread { font-size: 12px; color: var(--muted); }
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .msg { max-width: 720px; display: flex; flex-direction: column; gap: 4px; }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.copilot { align-self: flex-start; align-items: flex-start; }
+  .bubble {
+    padding: 10px 14px;
+    border-radius: 10px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    font-size: 14px;
+  }
+  .msg.user .bubble { background: var(--accent); color: #fff; }
+  .msg.copilot .bubble { background: var(--panel); border: 1px solid var(--border); }
+  .steps {
+    font-size: 11.5px;
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    padding-left: 4px;
+  }
+  .steps div { margin: 1px 0; }
+  #composer {
+    display: flex;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+  }
+  #composer input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  #composer button, .modal button {
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #composer button:disabled { opacity: 0.5; cursor: default; }
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    width: 420px;
+    max-width: 90vw;
+  }
+  .modal h2 { font-size: 15px; margin: 0 0 12px; color: var(--danger); }
+  .modal dl { font-size: 13px; margin: 0 0 16px; }
+  .modal dt { color: var(--muted); margin-top: 8px; }
+  .modal dd { margin: 2px 0 0; }
+  .modal .actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .modal .approve { background: var(--ok); }
+  .modal .reject { background: var(--danger); }
+  .typing { color: var(--muted); font-size: 13px; font-style: italic; }
+</style>
+</head>
+<body>
+  <div id="app">
+    <aside id="dashboard">
+      <div class="dash-header">
+        <h2>Alerts</h2>
+        <button class="refresh-btn" id="refreshAlerts">Refresh</button>
+      </div>
+      <div id="alertList"><div class="empty">Loading…</div></div>
+
+      <div id="incidentsSection">
+        <div class="dash-header">
+          <h2>Auto-Investigated Incidents</h2>
+          <button class="refresh-btn" id="refreshIncidents">Refresh</button>
+        </div>
+        <div id="incidentList"><div class="empty">None yet.</div></div>
+      </div>
+    </aside>
+
+    <div id="main">
+      <header>
+        <h1>AI SRE Copilot</h1>
+        <span class="thread" id="threadLabel"></span>
+      </header>
+      <div id="chat"></div>
+      <div id="composer">
+        <input id="input" type="text" placeholder="Why is checkout slow?" autofocus />
+        <button id="send">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h2>Approval required</h2>
+      <dl id="actionDetails"></dl>
+      <div class="actions">
+        <button class="reject" id="reject">Reject</button>
+        <button class="approve" id="approve">Approve</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+let threadId = null;
+let pendingAction = null;
+
+const chatEl = document.getElementById("chat");
+const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const overlay = document.getElementById("overlay");
+const actionDetails = document.getElementById("actionDetails");
+
+async function init() {
+  const res = await fetch("/api/session", { method: "POST" });
+  const data = await res.json();
+  threadId = data.thread_id;
+  document.getElementById("threadLabel").textContent = "session " + threadId.slice(0, 8);
+}
+
+function addMessage(role, text, steps) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + role;
+
+  if (steps && steps.length) {
+    const stepsEl = document.createElement("div");
+    stepsEl.className = "steps";
+    steps.forEach(s => {
+      const line = document.createElement("div");
+      line.textContent = s.type === "call"
+        ? `… calling ${s.name}(${JSON.stringify(s.args || {})})`
+        : `✓ ${s.name} returned`;
+      stepsEl.appendChild(line);
+    });
+    wrap.appendChild(stepsEl);
+  }
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = text;
+  wrap.appendChild(bubble);
+
+  chatEl.appendChild(wrap);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return wrap;
+}
+
+function showTyping() {
+  const el = document.createElement("div");
+  el.className = "msg copilot typing-wrap";
+  el.innerHTML = '<div class="typing">copilot is thinking…</div>';
+  chatEl.appendChild(el);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return el;
+}
+
+function showApproval(action) {
+  pendingAction = action;
+  actionDetails.innerHTML = `
+    <dt>Action</dt><dd>${action.action}</dd>
+    <dt>Service</dt><dd>${action.service_name}</dd>
+    <dt>Desired replicas</dt><dd>${action.desired_replicas}</dd>
+    <dt>Reason</dt><dd>${action.reason}</dd>
+  `;
+  overlay.classList.add("show");
+}
+
+function handleReply(data) {
+  if (data.pending_action) {
+    showApproval(data.pending_action);
+  } else {
+    addMessage("copilot", data.content, data.steps);
+  }
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  addMessage("user", text);
+  inputEl.value = "";
+  sendBtn.disabled = true;
+
+  const typingEl = showTyping();
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread_id: threadId, message: text }),
+    });
+    const data = await res.json();
+    typingEl.remove();
+    if (!res.ok) {
+      addMessage("copilot", "(error) " + (data.detail || res.statusText));
+    } else {
+      handleReply(data);
+    }
+  } catch (err) {
+    typingEl.remove();
+    addMessage("copilot", "(error) " + err.message);
+  } finally {
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+}
+
+async function respondToApproval(approved) {
+  overlay.classList.remove("show");
+  const typingEl = showTyping();
+  try {
+    const res = await fetch("/api/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread_id: threadId, approved }),
+    });
+    const data = await res.json();
+    typingEl.remove();
+    if (!res.ok) {
+      addMessage("copilot", "(error) " + (data.detail || res.statusText));
+    } else {
+      handleReply(data);
+    }
+  } catch (err) {
+    typingEl.remove();
+    addMessage("copilot", "(error) " + err.message);
+  }
+}
+
+document.getElementById("approve").addEventListener("click", () => respondToApproval(true));
+document.getElementById("reject").addEventListener("click", () => respondToApproval(false));
+sendBtn.addEventListener("click", sendMessage);
+inputEl.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+
+const alertListEl = document.getElementById("alertList");
+const ALERT_ORDER = { firing: 0, pending: 1, inactive: 2 };
+
+async function loadAlerts() {
+  try {
+    const res = await fetch("/api/alerts");
+    if (!res.ok) throw new Error(res.statusText);
+    const rules = await res.json();
+    renderAlerts(rules);
+  } catch (err) {
+    alertListEl.innerHTML = `<div class="error">Couldn't load alerts: ${err.message}</div>`;
+  }
+}
+
+function renderAlerts(rules) {
+  if (!rules.length) {
+    alertListEl.innerHTML = '<div class="empty">No alert rules configured.</div>';
+    return;
+  }
+  const sorted = [...rules].sort(
+    (a, b) => (ALERT_ORDER[a.state] ?? 3) - (ALERT_ORDER[b.state] ?? 3)
+  );
+  alertListEl.innerHTML = "";
+  sorted.forEach(rule => {
+    const card = document.createElement("div");
+    card.className = "alert-card " + (rule.state || "inactive");
+    card.innerHTML = `
+      <div class="name">${rule.name}</div>
+      <div class="meta">
+        <span class="badge ${rule.state}">${rule.state}</span>
+        <span>${rule.service}</span>
+        <span>${rule.severity}</span>
+      </div>
+      ${rule.summary ? `<div class="summary">${rule.summary}</div>` : ""}
+    `;
+    alertListEl.appendChild(card);
+  });
+}
+
+document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
+loadAlerts();
+setInterval(loadAlerts, 15000);
+
+// --- Auto-triaged incidents (alerts the copilot picked up on its own via
+// the Alertmanager webhook, without a human asking first) ---
+const incidentListEl = document.getElementById("incidentList");
+let selectedFingerprint = null;
+
+async function loadIncidents() {
+  try {
+    const res = await fetch("/api/incidents");
+    if (!res.ok) throw new Error(res.statusText);
+    const records = await res.json();
+    renderIncidents(records);
+  } catch (err) {
+    incidentListEl.innerHTML = `<div class="error">Couldn't load incidents: ${err.message}</div>`;
+  }
+}
+
+function renderIncidents(records) {
+  if (!records.length) {
+    incidentListEl.innerHTML = '<div class="empty">None yet.</div>';
+    return;
+  }
+  incidentListEl.innerHTML = "";
+  records.forEach(record => {
+    const card = document.createElement("div");
+    card.className = "incident-card " + record.status + (record.fingerprint === selectedFingerprint ? " selected" : "");
+    card.innerHTML = `
+      <div class="name">${record.alert_name}</div>
+      <div class="meta">
+        <span class="badge ${record.status}">${record.status.replace("_", " ")}</span>
+        <span>${record.service || "unknown service"}</span>
+        <span>${record.severity}</span>
+      </div>
+    `;
+    card.addEventListener("click", () => openIncident(record));
+    incidentListEl.appendChild(card);
+  });
+}
+
+function openIncident(record) {
+  selectedFingerprint = record.fingerprint;
+  threadId = record.thread_id;
+  document.getElementById("threadLabel").textContent = "incident " + record.alert_name;
+  chatEl.innerHTML = "";
+  addMessage("user", `(auto) ${record.alert_name} fired on ${record.service || "unknown service"} — investigating…`);
+  if (record.status === "error") {
+    addMessage("copilot", "(error) " + record.error);
+  } else if (record.content || record.steps.length) {
+    addMessage("copilot", record.content || "(investigation in progress…)", record.steps);
+  } else {
+    addMessage("copilot", "(investigation in progress…)");
+  }
+  if (record.pending_action) {
+    showApproval(record.pending_action);
+  }
+  loadIncidents(); // refresh selected-card highlighting
+}
+
+document.getElementById("refreshIncidents").addEventListener("click", loadIncidents);
+loadIncidents();
+setInterval(loadIncidents, 5000);
+
+init();
+</script>
+</body>
+</html>

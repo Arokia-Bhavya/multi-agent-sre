@@ -1,0 +1,55 @@
+[project]
+name = "multi-agent-sre"
+version = "0.1.0"
+description = "Observability tools for the Multi-Agent AI SRE Platform"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "kubernetes>=28.0.0",
+    "requests>=2.31.0",
+    "langgraph>=1.0.0",
+    "langchain-core>=1.0.0",
+    "langchain-anthropic>=1.0.0",
+    "langchain-groq>=0.2.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "scikit-learn>=1.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",  # required by fastapi.testclient (webui tests)
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+# `testpaths` deliberately lists the four unit-test directories rather than
+# the repo root. ai-platform/tools/ also contains smoke scripts named
+# `test_*.py` (test_clients.py, test_agents_smoke.py, test_milestone6_smoke.py)
+# which pytest would otherwise collect — they need a live cluster and
+# port-forwards, so they must not run as part of the offline suite.
+testpaths = [
+    "ai-platform/tools/tests",
+    "ai-platform/coordinator/tests",
+    "ai-platform/copilot/tests",
+    "ai-platform/webui/tests",
+]
+
+# The project's modules import each other flatly (`from metrics_agent import
+# MetricsAgent`) and rely on the four source directories being on sys.path.
+# The entry points do that with `sys.path.insert(...)` at import time; this
+# gives the test run the same paths without every test file needing its own
+# copy of that preamble.
+pythonpath = [
+    "ai-platform/tools",
+    "ai-platform/coordinator",
+    "ai-platform/copilot",
+    "ai-platform/webui",
+]
+
+addopts = "-q"

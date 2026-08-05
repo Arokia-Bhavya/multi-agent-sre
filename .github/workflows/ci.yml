@@ -1,0 +1,53 @@
+name: CI
+
+# Runs the offline test suite (no cluster, API key, or network needed —
+# see README.md's Tests section) on every push/PR, plus a Docker build
+# check once the Dockerfile exists, so a broken image is caught here
+# instead of on whatever machine first tries to deploy it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      # Reads .python-version (3.14) automatically.
+      - name: Install Python
+        run: uv python install
+
+      # Installs the dev group (pytest, httpx) plus ai_platform itself in
+      # editable mode — same as local `uv sync`, see pyproject.toml.
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run tests
+        run: uv run pytest
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build-only for now — no registry push configured. See
+      # milestones.md's "Production deployment" phase notes: pushing to a
+      # registry is a Phase 4/5 decision that depends on where this
+      # actually gets deployed, not something to wire up speculatively
+      # before that's decided.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: multi-agent-sre:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

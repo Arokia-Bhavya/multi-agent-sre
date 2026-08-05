@@ -1,0 +1,41 @@
+# Mirrors .gitignore's intent for the build context — none of this belongs
+# inside the image or should slow down `docker build`'s context upload.
+
+.git/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+.idea/
+.vscode/
+.DS_Store
+
+.env
+*.env
+
+ai_platform/runbooks/
+ai_platform/webui/incidents.db
+ai_platform/webui/incidents_test.db
+*.db-journal
+*.tmp
+
+# Not needed inside the image; the k8s/docs assets are read by humans and
+# `helm`/`kubectl` from the repo checkout, not by the running container.
+#
+# Listed by exact top-level filename rather than a blanket "*.md" pattern
+# — a wildcard would also match knowledge_base/*.md, which IS real runtime
+# content (knowledge_base.py's DEFAULT_KB_DIR resolves to
+# <repo root>/knowledge_base at import time, and search_knowledge_base
+# reads those files on every call; excluding them would make that tool
+# silently return zero results inside the container).
+observability/
+docs/
+/ARCHITECTURE.md
+/milestones.md
+
+# Test files aren't shipped in the runtime image (see Dockerfile's
+# `uv sync --no-dev`) — excluding them from the build context too avoids
+# invalidating Docker's layer cache on every test-only change.
+**/tests/

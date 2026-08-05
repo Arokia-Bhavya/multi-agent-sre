@@ -1,0 +1,93 @@
+# Runs the container built from the repo's Dockerfile (ai_platform.webui.server)
+# in-cluster on EKS. Mirrors the env vars documented in .env.example;
+# non-secret values are set directly below, secret values (API keys, OAuth
+# client secret, session key) come from a pre-existing Secret named
+# `ai-platform-secrets` in this namespace — this manifest only references it
+# by name and never contains secret values itself. Create it once per
+# cluster with:
+#
+#   kubectl create namespace ai-platform
+#   kubectl create secret generic ai-platform-secrets -n ai-platform \
+#     --from-literal=GROQ_API_KEY=... \
+#     --from-literal=ANTHROPIC_API_KEY=... \
+#     --from-literal=VOYAGE_API_KEY=... \
+#     --from-literal=GOOGLE_CLIENT_ID=... \
+#     --from-literal=GOOGLE_CLIENT_SECRET=... \
+#     --from-literal=SESSION_SECRET_KEY=... \
+#     --from-literal=WEBUI_API_KEY=...
+#
+# The CD workflow (.github/workflows/deploy.yaml) only ever updates the pod
+# template's `image:` field via `kubectl set image` — it never touches this
+# Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-platform
+  namespace: ai-platform
+  labels:
+    app: ai-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-platform
+  template:
+    metadata:
+      labels:
+        app: ai-platform
+    spec:
+      serviceAccountName: ai-platform
+      containers:
+        - name: ai-platform
+          # Placeholder — the CD workflow replaces this via
+          # `kubectl set image deployment/ai-platform ai-platform=<ECR image URI>`.
+          # Never applied as-is on its own; kept here only so this manifest
+          # is valid YAML for the one-time `kubectl apply` that creates the
+          # Deployment before the first image is set.
+          image: PLACEHOLDER_IMAGE
+          ports:
+            - containerPort: 8000
+          env:
+            - name: LLM_PROVIDER
+              value: "groq"
+            - name: KUBERNETES_NAMESPACE
+              value: "otel-demo"
+            # In-cluster DNS for the otel-demo Helm release's services —
+            # replaces the localhost:PORT values from .env.example, which
+            # only work with `kubectl port-forward` from outside the cluster.
+            - name: PROMETHEUS_URL
+              value: "http://prometheus.otel-demo.svc.cluster.local:9090"
+            - name: JAEGER_URL
+              value: "http://jaeger.otel-demo.svc.cluster.local:16686"
+            - name: WEBUI_HOST
+              value: "0.0.0.0"
+            - name: WEBUI_COOKIE_SECURE
+              value: "true"
+            - name: REMEDIATION_MAX_REPLICAS
+              value: "10"
+            - name: REMEDIATION_COOLDOWN_SECONDS
+              value: "300"
+            - name: MAX_CONCURRENT_INVESTIGATIONS
+              value: "3"
+          envFrom:
+            - secretRef:
+                name: ai-platform-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20

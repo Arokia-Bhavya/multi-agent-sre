@@ -119,6 +119,17 @@ prometheus:
                 summary: "product-catalog pod is down"
                 description: "No product-catalog container is reporting metrics — it may be scaled to 0 or crash-looping."
 
+            - alert: FrontendPodDown
+              expr: |
+                absent(container_memory_usage_bytes{namespace="otel-demo",container="frontend"})
+              for: 1m
+              labels:
+                severity: critical
+                service: frontend
+              annotations:
+                summary: "frontend pod is down"
+                description: "No frontend container is reporting metrics — it may be scaled to 0 or crash-looping."    
+
   # The opentelemetry-demo chart's own values.yaml sets
   # prometheus.alertmanager.enabled: false by default (everything here runs
   # inside the otel-demo namespace, there's no separate kube-prometheus-stack
@@ -150,6 +161,14 @@ prometheus:
           webhook_configs:
             - url: "http://host.docker.internal:8000/api/webhook/alertmanager"
               send_resolved: true
+              # Machine auth for the one caller that can't do an OIDC browser
+              # redirect (see ai_platform/webui/server.py's `_require_auth`).
+              # Must match WEBUI_API_KEY in .env — Alertmanager sends it as
+              # `Authorization: Bearer <credentials>`, which server.py also
+              # accepts alongside X-API-Key.
+              http_config:
+                authorization:
+                  credentials: "test-api-key"
 
 components:
   kafka:

@@ -14,8 +14,8 @@ __pycache__/
 .env
 
 # Local runtime artifacts
-ai-platform/runbooks/
-ai-platform/webui/incidents.db
-ai-platform/webui/incidents_test.db
+ai_platform/runbooks/
+ai_platform/webui/incidents.db
+ai_platform/webui/incidents_test.db
 *.db-journal
 *.tmp

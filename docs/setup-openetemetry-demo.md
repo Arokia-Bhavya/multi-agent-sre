@@ -80,18 +80,15 @@ kubectl port-forward -n otel-demo svc/jaeger 16686:16686
 
 Open `http://localhost:16686`
 
-## 8. Install the monitoring stack (Alertmanager)
+## 8. Access Alertmanager
 
-The demo bundles Prometheus and Jaeger but not Alertmanager, which the
-Milestone 6 auto-triage webhook depends on. Install `kube-prometheus-stack`
-alongside it:
+`observability/helm/otel-demo-minimal-values.yaml` also enables the demo
+chart's own Alertmanager subchart and wires Prometheus to it, so it's
+already running in the `otel-demo` namespace — no separate install needed.
+It drives the Milestone 6 auto-triage webhook.
 
 ```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm upgrade --install monitoring \
-  prometheus-community/kube-prometheus-stack \
-  -n monitoring --create-namespace \
-  --values observability/helm/kube-prometheus-values.yaml
+kubectl port-forward -n otel-demo svc/otel-demo-alertmanager 9093:9093
 ```
 
 ## Notes

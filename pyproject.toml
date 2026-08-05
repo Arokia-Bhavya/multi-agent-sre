@@ -16,6 +16,9 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
     "scikit-learn>=1.3.0",
+    "numpy>=1.26.0",       # used directly by semantic_search.py (embeddings similarity); already a transitive scikit-learn dep, listed explicitly since it's now imported directly
+    "authlib>=1.3.0",       # Google OIDC authorization-code flow (webui/server.py)
+    "itsdangerous>=2.1.0",  # signed session cookies for the OIDC-authenticated browser session
 ]
 
 [dependency-groups]
@@ -24,32 +27,45 @@ dev = [
     "httpx>=0.27.0",  # required by fastapi.testclient (webui tests)
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# The source package is `ai_platform/` (not `multi_agent_sre/` — hatchling's
+# default package-discovery guess from the project name), so it has to be
+# named explicitly.
+packages = ["ai_platform"]
+
 [tool.uv]
-package = false
+# Previously `false`: every module imported its siblings flatly
+# (`from metrics_agent import MetricsAgent`) via hand-rolled sys.path
+# insertion, rather than `ai_platform` being a real, installable package.
+# `uv sync` now installs this project itself in editable mode, which is what
+# makes `from ai_platform.tools.metrics_agent import MetricsAgent` resolve
+# from anywhere — entry points run as `python -m ai_platform.copilot.chat`
+# (module execution also puts the repo root on sys.path via cwd, so this
+# works even before/without the editable install finishing, but the
+# editable install is what makes plain `import ai_platform` work from
+# anywhere else too, e.g. a REPL or a different cwd).
+package = true
 
 [tool.pytest.ini_options]
 # `testpaths` deliberately lists the four unit-test directories rather than
-# the repo root. ai-platform/tools/ also contains smoke scripts named
+# the repo root. ai_platform/tools/ also contains smoke scripts named
 # `test_*.py` (test_clients.py, test_agents_smoke.py, test_milestone6_smoke.py)
 # which pytest would otherwise collect — they need a live cluster and
 # port-forwards, so they must not run as part of the offline suite.
 testpaths = [
-    "ai-platform/tools/tests",
-    "ai-platform/coordinator/tests",
-    "ai-platform/copilot/tests",
-    "ai-platform/webui/tests",
+    "ai_platform/tools/tests",
+    "ai_platform/coordinator/tests",
+    "ai_platform/copilot/tests",
+    "ai_platform/webui/tests",
 ]
 
-# The project's modules import each other flatly (`from metrics_agent import
-# MetricsAgent`) and rely on the four source directories being on sys.path.
-# The entry points do that with `sys.path.insert(...)` at import time; this
-# gives the test run the same paths without every test file needing its own
-# copy of that preamble.
-pythonpath = [
-    "ai-platform/tools",
-    "ai-platform/coordinator",
-    "ai-platform/copilot",
-    "ai-platform/webui",
-]
-
+# No `pythonpath` setting needed (unlike before the ai-platform -> ai_platform
+# package rename): every directory from the repo root down to each test file
+# now has an `__init__.py`, so pytest's own import-mode logic walks up that
+# chain and puts the repo root on sys.path itself — `import ai_platform.x.y`
+# resolves the same way it does for the installed editable package.
 addopts = "-q"

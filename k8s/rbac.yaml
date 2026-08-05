@@ -1,0 +1,48 @@
+# ServiceAccount the ai_platform Deployment runs as, plus the minimum RBAC
+# it needs against the `otel-demo` namespace to do what
+# ai_platform/tools/kubernetes_client.py actually does: read pod/deployment
+# state (metrics_agent, RCA) and patch deployment scale for the one
+# cluster-mutating tool, remediate_scale_deployment (copilot_tools.py).
+#
+# kubernetes_client.py calls config.load_incluster_config() when running
+# inside a pod (falls back to local kubeconfig otherwise), so no kubeconfig
+# secret needs to be mounted — the ServiceAccount token + this Role is
+# sufficient.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-platform
+  namespace: ai-platform
+---
+# Scoped to otel-demo, not cluster-wide: ai_platform only ever reads/patches
+# the workload it observes, never its own namespace or anything else in the
+# cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-platform-otel-demo-access
+  namespace: otel-demo
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-platform-otel-demo-access
+  namespace: otel-demo
+subjects:
+  - kind: ServiceAccount
+    name: ai-platform
+    namespace: ai-platform
+roleRef:
+  kind: Role
+  name: ai-platform-otel-demo-access
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,98 @@
+name: CI/CD — Deploy ai_platform to EKS
+
+# CI (test) runs on every push/PR, same as ci.yml. CD (build, push, deploy)
+# only runs on push to main (or manual dispatch) — not on PRs, and not
+# without CI passing first (`needs: ci`).
+#
+# Adapted from a Bedrock AgentCore reference workflow: same CI/CD shape
+# (lint/test → build+push → deploy), but the CD half targets this repo's
+# actual deployment target per docs/aws-demo-setup.md — an EKS cluster
+# reached via kubectl, not AgentCore. No ruff step: this repo has no ruff
+# config/dependency yet.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ci:
+    name: CI — test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Reads .python-version (3.14) automatically.
+      - name: Install Python
+        run: uv python install
+
+      - name: Install dependencies (incl. dev)
+        run: uv sync --frozen
+
+      - name: Test (pytest)
+        run: uv run pytest
+
+  cd:
+    name: CD — build, push & deploy
+    needs: ci
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag "$REGISTRY/$REPOSITORY:$IMAGE_TAG" \
+            --tag "$REGISTRY/$REPOSITORY:latest" \
+            --push .
+          echo "IMAGE_URI=$REGISTRY/$REPOSITORY:$IMAGE_TAG" >> "$GITHUB_ENV"
+
+      - name: Point kubectl at the EKS cluster
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+
+      - name: Apply namespace/RBAC/service (safe to re-run — no-ops if unchanged)
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/rbac.yaml
+          kubectl apply -f k8s/service.yaml
+
+      - name: Ensure Deployment exists
+        # First run on a fresh cluster: k8s/deployment.yaml's placeholder
+        # image would otherwise fail to pull. `kubectl apply` creates it if
+        # missing (harmless if it already exists); the image is set for
+        # real in the next step regardless.
+        run: kubectl apply -f k8s/deployment.yaml
+
+      - name: Deploy new image
+        run: |
+          kubectl set image deployment/ai-platform \
+            ai-platform="$IMAGE_URI" \
+            -n ai-platform
+          kubectl rollout status deployment/ai-platform -n ai-platform --timeout=180s

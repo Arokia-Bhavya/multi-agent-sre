@@ -11,7 +11,7 @@ any change that touches the cluster.
 
 - OpenTelemetry Demo (Astronomy Shop) — the application under observation
 - Kubernetes (Kind)
-- Prometheus / Alertmanager / Grafana
+- Prometheus / Alertmanager
 - Jaeger + OpenTelemetry Collector
 - Python 3.14, LangGraph, FastAPI
 
@@ -44,7 +44,7 @@ uv --version
 ```text
 multi-agent-sre/
 │
-├── ai-platform/
+├── ai_platform/
 │   ├── tools/          # Milestone 2-3: observability clients + agents
 │   │                   #   plus Milestone 6 analysis: alert_correlator,
 │   │                   #   anomaly_detector, incident_search, incident_store
@@ -54,7 +54,7 @@ multi-agent-sre/
 │   └── runbooks/       # generated remediation docs (gitignored)
 │
 ├── observability/
-│   └── helm/           # Helm values for the demo app and monitoring stack
+│   └── helm/           # Helm values for the demo app (incl. Alertmanager)
 │
 ├── docs/
 ├── ARCHITECTURE.md
@@ -62,8 +62,11 @@ multi-agent-sre/
 └── README.md
 ```
 
-Each of the four `ai-platform/` packages has a `tests/` subdirectory holding
-its own mocked unit tests.
+`ai_platform` is a real installable package (`uv sync` installs it in editable
+mode) — every module imports its siblings as `ai_platform.tools.x`,
+`ai_platform.coordinator.y`, etc., rather than relying on manual `sys.path`
+setup. Each of the four subpackages has a `tests/` subdirectory holding its
+own mocked unit tests.
 
 ---
 
@@ -98,26 +101,22 @@ kubectl get pods -n otel-demo
 
 Key services: `frontend-proxy`, `frontend`, `checkout`, `cart`, `product-catalog`.
 
-### 3. Deploy the monitoring stack
+`otel-demo-minimal-values.yaml` also enables the demo chart's own
+**Alertmanager** subchart (in the `otel-demo` namespace) and wires Prometheus
+to it, so it drives the Milestone 6 auto-triage webhook — no separate
+monitoring stack install needed.
 
-The demo chart bundles its own Prometheus and Jaeger. `kube-prometheus-stack`
-is installed alongside it to provide **Alertmanager**, which drives the
-Milestone 6 auto-triage webhook.
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm upgrade --install monitoring \
-  prometheus-community/kube-prometheus-stack \
-  -n monitoring --create-namespace \
-  --values observability/helm/kube-prometheus-values.yaml
-```
-
-### 4. Install Python dependencies
+### 3. Install Python dependencies
 
 ```bash
 uv sync
 cp .env.example .env   # then fill in your API key
 ```
+
+To use the Web UI, also set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in
+`.env` (Google OIDC sign-in — see the comments in `.env.example` for how to
+create one). Without them, `/login` and every `/api/*` route return an
+error; the CLI copilot doesn't need this.
 
 ---
 
@@ -130,15 +129,7 @@ Each of these needs its own terminal.
 | Storefront | `kubectl port-forward -n otel-demo svc/frontend-proxy 8080:8080` | http://localhost:8080 |
 | Prometheus | `kubectl port-forward -n otel-demo svc/prometheus 9090:9090` | http://localhost:9090 |
 | Jaeger | `kubectl port-forward -n otel-demo svc/jaeger 16686:16686` | http://localhost:16686 |
-| Grafana | `kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80` | http://localhost:3000 |
-| Alertmanager | `kubectl port-forward -n monitoring svc/monitoring-kube-prometheus-alertmanager 9093:9093` | http://localhost:9093 |
-
-Grafana admin password:
-
-```bash
-kubectl get secret monitoring-grafana -n monitoring \
-  -o jsonpath="{.data.admin-password}" | base64 --decode
-```
+| Alertmanager | `kubectl port-forward -n otel-demo svc/otel-demo-alertmanager 9093:9093` | http://localhost:9093 |
 
 ---
 
@@ -147,17 +138,19 @@ kubectl get secret monitoring-grafana -n monitoring \
 ### Web UI (recommended)
 
 ```bash
-uv run python ai-platform/webui/server.py
+uv run python -m ai_platform.webui.server
 ```
 
-Open http://localhost:8000 — chat interface with a live tool-call trace, an
-Incidents panel showing auto-triaged alerts, and an approval modal that gates
-any cluster-mutating action.
+Open http://localhost:8000 (sign in with Google) — three tabs: **Operations
+Hub** (default landing view — incident KPIs, resolution rate, time-to-
+mitigate, volume/outcomes chart), **Timeline** (every auto-triaged incident,
+chronological), and **Chat** (conversational copilot with a live tool-call
+trace). An approval modal gates any cluster-mutating action from any tab.
 
 ### CLI copilot
 
 ```bash
-uv run python ai-platform/copilot/chat.py
+uv run python -m ai_platform.copilot.chat
 ```
 
 Ask things like:
@@ -171,14 +164,14 @@ Ask things like:
 ### One-off investigation
 
 ```bash
-uv run python ai-platform/coordinator/run_investigation.py
+uv run python -m ai_platform.coordinator.run_investigation
 ```
 
 ### Offline demos (no cluster or API key needed)
 
 ```bash
-uv run python ai-platform/copilot/sample_demo.py
-uv run python ai-platform/copilot/sample_remediation_demo.py
+uv run python -m ai_platform.copilot.sample_demo
+uv run python -m ai_platform.copilot.sample_remediation_demo
 ```
 
 ---
@@ -192,22 +185,23 @@ uv sync        # installs the dev group (pytest, httpx)
 uv run pytest
 ```
 
-180 tests across four directories. `pyproject.toml` configures both
-`pythonpath` (so the flat imports resolve without any `PYTHONPATH` juggling)
-and `testpaths`, which is what keeps the live-cluster smoke scripts out of
-the offline run:
+`ai_platform` is a real installable package (see `[tool.uv] package = true`
+in `pyproject.toml`) — `uv sync` installs it in editable mode, so
+`ai_platform.tools.x`-style imports resolve without any `sys.path` or
+`PYTHONPATH` setup. `pyproject.toml`'s `testpaths` is what keeps the
+live-cluster smoke scripts below out of the offline run:
 
 ```bash
-uv run pytest ai-platform/coordinator/tests   # one milestone at a time
+uv run pytest ai_platform/coordinator/tests   # one milestone at a time
 ```
 
 Smoke tests that *do* need a live cluster and port-forwards are plain
 scripts, not pytest targets — run them directly:
 
 ```bash
-uv run python ai-platform/tools/test_clients.py         # clients (Milestone 2)
-uv run python ai-platform/tools/test_agents_smoke.py    # agents  (Milestone 3)
-uv run python ai-platform/tools/test_milestone6_smoke.py
+uv run python ai_platform/tools/test_clients.py         # clients (Milestone 2)
+uv run python ai_platform/tools/test_agents_smoke.py    # agents  (Milestone 3)
+uv run python ai_platform/tools/test_milestone6_smoke.py
 ```
 
 ---
@@ -221,13 +215,14 @@ kubectl scale deployment product-catalog --replicas=0 -n otel-demo
 ```
 
 With Alertmanager wired to the webhook, the platform picks the alert up on its
-own, investigates it, and files it in the Incidents panel. Restore with:
+own, investigates it, and it shows up in the Timeline and Operations Hub
+tabs. Restore with:
 
 ```bash
 kubectl scale deployment product-catalog --replicas=1 -n otel-demo
 ```
 
-See [`ai-platform/copilot/REMEDIATION_RUNBOOK.md`](ai-platform/copilot/REMEDIATION_RUNBOOK.md)
+See [`ai_platform/copilot/REMEDIATION_RUNBOOK.md`](ai_platform/copilot/REMEDIATION_RUNBOOK.md)
 for the full end-to-end fault-injection walkthrough.
 
 ---
@@ -236,7 +231,6 @@ for the full end-to-end fault-injection walkthrough.
 
 ```bash
 # Stop port-forwards with Ctrl+C in each terminal, then:
-helm uninstall monitoring -n monitoring
 helm uninstall otel-demo -n otel-demo
 kind delete cluster --name ai-sre
 ```
@@ -252,8 +246,18 @@ kind delete cluster --name ai-sre
 | 3 | Individual AI Agents | ✅ Complete |
 | 4 | LangGraph Multi-Agent Orchestration | ✅ Complete |
 | 5 | AI SRE Copilot | ✅ Complete |
-| 6 | Advanced Features | 🟡 Mostly complete |
+| 6 | Advanced Features | ✅ Complete |
 
-Milestone 6 remaining: Slack/Teams integration, MCP server support, visual
-incident timeline, knowledge base integration, and true embedding-based
-incident search. See [`milestones.md`](milestones.md) for detail.
+Knowledge base integration and true embedding-based incident search are
+implemented: `search_knowledge_base` searches human-authored playbooks
+under [`knowledge_base/`](knowledge_base/), and both it and
+`search_similar_incidents` use real semantic similarity (Voyage AI
+embeddings) when `VOYAGE_API_KEY` is set, falling back to TF-IDF keyword
+search otherwise — see `ai_platform/tools/semantic_search.py`. See
+[`milestones.md`](milestones.md) for full detail.
+
+Since Milestone 6, the web UI also gained Google OIDC sign-in (replacing
+the shared-secret model), a dedicated Incident Timeline tab, an Operations
+Hub KPI dashboard (now the default landing tab), and PII/secret redaction
+on data reaching the LLM or SQLite — see `ARCHITECTURE.md` and
+`milestones.md`'s post-Milestone-6 sections.

@@ -1,0 +1,9 @@
+# Separate namespace for the ai_platform app itself, distinct from
+# `otel-demo` (the observed workload it investigates/remediates) — keeps
+# `kubectl get pods -n otel-demo` output free of the platform's own pod,
+# and lets RBAC below grant ai_platform's ServiceAccount access into
+# otel-demo explicitly rather than implicitly via a shared namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-platform

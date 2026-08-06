@@ -1,0 +1,17 @@
+# ClusterIP only, matching how every other service in this demo is reached
+# (kubectl port-forward) rather than a public LoadBalancer — see
+# docs/aws-demo-setup.md. Switch `type` to LoadBalancer later if this needs
+# a real public URL (e.g. for the Google OAuth redirect from an actual
+# browser instead of localhost).
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-platform
+  namespace: ai-platform
+spec:
+  type: ClusterIP
+  selector:
+    app: ai-platform
+  ports:
+    - port: 8000
+      targetPort: 8000

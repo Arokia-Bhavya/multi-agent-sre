@@ -67,10 +67,14 @@ def handle_alertmanager_webhook(
     task, so this function stays synchronous and cheap to unit-test.
 
     Resolved alerts are marked `status="resolved"` on their existing record
-    (if any) and are never (re-)investigated. An alert fingerprint already
-    tracked and still firing is left alone — we don't re-trigger
-    investigation on every Alertmanager repeat-interval resend of the same
-    firing alert.
+    (if any). An alert fingerprint that's already tracked and still open
+    (not resolved) is left alone — we don't re-trigger investigation on
+    every Alertmanager repeat-interval resend of the same firing alert. But
+    a fingerprint whose previous record is `resolved` is treated as a new
+    incident when it fires again: Alertmanager's fingerprint is a hash of
+    the alert's label set, so a recurring alert (same service/alertname)
+    reuses the same fingerprint across separate occurrences, and without
+    this check a second, unrelated firing would be silently dropped.
     """
     to_investigate: List[str] = []
 
@@ -88,10 +92,17 @@ def handle_alertmanager_webhook(
                 store.update(fingerprint, status="resolved")
             continue
 
-        if existing is not None:
-            # Already tracked (investigating, awaiting approval, completed, or
-            # errored) — don't restart investigation on a repeat notification.
+        if existing is not None and existing.status != "resolved":
+            # Already tracked and still open (investigating, awaiting
+            # approval, completed, or errored) — don't restart investigation
+            # on a repeat notification of the same ongoing incident.
             continue
+        # existing is None, or its fingerprint previously resolved and is now
+        # firing again — Alertmanager reuses the same fingerprint (a hash of
+        # the label set) for every occurrence of the same alert, so a
+        # resolved incident re-firing later looks identical to a repeat
+        # notification unless we check status. Treat it as a new incident:
+        # store.create() upserts on fingerprint and mints a fresh thread_id.
 
         service = extract_service_name({"labels": labels, "name": alert_name}, known_services=known_services)
         severity = labels.get("severity", "unknown")

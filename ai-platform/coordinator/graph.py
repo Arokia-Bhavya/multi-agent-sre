@@ -170,7 +170,7 @@ class InvestigationGraph:
                 self._llm = ChatGroq(model=model, temperature=0)
             else:
                 from langchain_anthropic import ChatAnthropic
-                self._llm = ChatAnthropic(model=model, temperature=0)
+                self._llm = ChatAnthropic(model=model)
         return self._llm
 
     def _build_graph(self) -> StateGraph:

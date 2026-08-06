@@ -87,6 +87,24 @@ class HandleAlertmanagerWebhookTests(TestCase):
         self.assertEqual(new_fps, [])
         self.assertIsNone(self.store.get("never-seen"))
 
+    def test_alert_refiring_after_prior_resolution_is_reinvestigated(self):
+        # Alertmanager's fingerprint is a hash of the label set, so a
+        # recurring alert (e.g. FrontendPodDown firing, resolving, then
+        # firing again later) reuses the same fingerprint across separate
+        # occurrences. A resolved record for that fingerprint must not
+        # suppress investigation of the new occurrence.
+        handle_alertmanager_webhook({"alerts": [_alert(status="firing")]}, self.store)
+        handle_alertmanager_webhook({"alerts": [_alert(status="resolved")]}, self.store)
+        self.assertEqual(self.store.get("fp1").status, "resolved")
+        old_thread_id = self.store.get("fp1").thread_id
+
+        new_fps = handle_alertmanager_webhook({"alerts": [_alert(status="firing")]}, self.store)
+
+        self.assertEqual(new_fps, ["fp1"])
+        record = self.store.get("fp1")
+        self.assertEqual(record.status, "investigating")
+        self.assertNotEqual(record.thread_id, old_thread_id)
+
     def test_multiple_alerts_in_one_payload_are_all_handled(self):
         payload = {"alerts": [_alert(fingerprint="a"), _alert(fingerprint="b", alertname="PaymentErrors")]}
 

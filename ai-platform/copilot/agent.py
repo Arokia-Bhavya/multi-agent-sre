@@ -114,7 +114,7 @@ def _build_llm(llm: Optional[Any] = None) -> Any:
         return ChatGroq(model=model, temperature=0)
     else:
         from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(model=model, temperature=0)
+        return ChatAnthropic(model=model)
 
 
 @dataclass(frozen=True)

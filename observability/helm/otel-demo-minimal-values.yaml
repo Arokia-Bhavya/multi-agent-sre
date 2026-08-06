@@ -48,6 +48,21 @@ prometheus:
       - static_configs:
           - targets:
               - otel-demo-alertmanager:9093
+    # DEMO-SPEED TUNING (revert before leaving this running unattended):
+    # defaults are scrape_interval 1m / evaluation_interval 1m, and
+    # Prometheus's instant-vector queries (what absent() uses) implicitly
+    # look back --query.lookback-delta (default 5m) for the most recent
+    # sample even after a scrape target disappears. That 5m lookback is
+    # almost certainly why FrontendPodDown took ~5 min to fire despite its
+    # `for: 1m` — the metric only "goes absent" once the last real sample
+    # ages past the lookback window. Shrinking all three collapses that to
+    # roughly for: (1m) + lookback (30s) + scrape/eval jitter, instead of
+    # for: (1m) + lookback (5m).
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    extraArgs:
+      query.lookback-delta: "30s"
   serverFiles:
     alerting_rules.yml:
       groups:
@@ -60,7 +75,7 @@ prometheus:
                   /
                   sum(rate(http_server_duration_milliseconds_count{service_name="frontend"}[5m]))
                 ) > 0.05
-              for: 2m
+              for: 1m
               labels:
                 severity: warning
                 service: frontend
@@ -76,7 +91,7 @@ prometheus:
                     rate(http_server_duration_milliseconds_bucket{service_name="frontend"}[5m])
                   )
                 ) > 3000
-              for: 3m
+              for: 1m
               labels:
                 severity: warning
                 service: frontend
@@ -89,7 +104,7 @@ prometheus:
                 sum by (pod, container) (
                   container_memory_working_set_bytes{namespace="otel-demo",container="frontend"}
                 ) > 209715200
-              for: 5m
+              for: 1m
               labels:
                 severity: warning
                 service: frontend
@@ -118,6 +133,17 @@ prometheus:
               annotations:
                 summary: "product-catalog pod is down"
                 description: "No product-catalog container is reporting metrics — it may be scaled to 0 or crash-looping."
+
+            - alert: FrontendPodDown
+              expr: |
+                absent(container_memory_usage_bytes{namespace="otel-demo",container="frontend"})
+              for: 1m
+              labels:
+                severity: critical
+                service: frontend
+              annotations:
+                summary: "frontend pod is down"
+                description: "No frontend container is reporting metrics — it may be scaled to 0 or crash-looping."    
 
   # The opentelemetry-demo chart's own values.yaml sets
   # prometheus.alertmanager.enabled: false by default (everything here runs

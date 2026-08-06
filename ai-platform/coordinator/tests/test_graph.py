@@ -30,7 +30,7 @@ class LLMProviderSelectionTests(TestCase):
         with mock.patch.dict(os.environ, {}, clear=True):
             with mock.patch("langchain_anthropic.ChatAnthropic") as mock_chat:
                 self._graph().llm
-                mock_chat.assert_called_once_with(model=DEFAULT_MODELS["anthropic"], temperature=0)
+                mock_chat.assert_called_once_with(model=DEFAULT_MODELS["anthropic"])
 
     def test_llm_provider_groq_builds_chat_groq_with_default_model(self):
         with mock.patch.dict(os.environ, {"LLM_PROVIDER": "groq"}, clear=True):

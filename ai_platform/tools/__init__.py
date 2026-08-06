@@ -11,7 +11,7 @@ This package contains reusable Python clients for interacting with:
 - MetricsAgent, TraceAgent, KubernetesAgent, AlertAgent
 """
 
-from .prometheus_client import PrometheusClient
+from .prometheus_http_client import PrometheusClient
 from .jaeger_client import JaegerClient
 from .kubernetes_client import KubernetesClient
 from .alertmanager import AlertmanagerClient, AlertSeverity

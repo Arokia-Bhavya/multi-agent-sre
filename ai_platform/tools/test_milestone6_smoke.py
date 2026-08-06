@@ -13,7 +13,7 @@ import os
 
 from dotenv import load_dotenv
 
-from ai_platform.tools.prometheus_client import PrometheusClient
+from ai_platform.tools.prometheus_http_client import PrometheusClient
 from ai_platform.tools.alertmanager import AlertmanagerClient
 
 from ai_platform.tools.alert_agent import AlertAgent

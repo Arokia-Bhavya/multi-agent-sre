@@ -8,6 +8,8 @@ from kubernetes import client, config, watch
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 
+from ai_platform.tools.pii_redaction import redact_text
+
 
 class KubernetesClient:
     """
@@ -152,7 +154,11 @@ class KubernetesClient:
             event_list.append({
                 "type": event.type,
                 "reason": event.reason,
-                "message": event.message,
+                # Event messages are free text (e.g. an image-pull error can
+                # embed a registry URL with credentials, a probe failure can
+                # echo a response body) and pass through to the LLM, so they
+                # get the same PII/secret scrub as pod logs below.
+                "message": redact_text(event.message),
                 "object": f"{event.involved_object.kind}/{event.involved_object.name}",
                 "timestamp": event.last_timestamp or event.first_timestamp,
                 "count": event.count or 1,
@@ -207,7 +213,11 @@ class KubernetesClient:
             tail_lines: Number of recent lines to retrieve
             
         Returns:
-            Log text
+            Log text, with PII/secret-shaped substrings (emails, phone
+            numbers, card numbers, SSNs, API keys/tokens) redacted — this is
+            the highest-risk free-text surface in the platform: raw
+            application logs from a live e-commerce app, forwarded straight
+            to a third-party LLM API and then persisted to disk.
         """
         logs = self.v1.read_namespaced_pod_log(
             pod_name,
@@ -215,4 +225,4 @@ class KubernetesClient:
             container=container,
             tail_lines=tail_lines,
         )
-        return logs
+        return redact_text(logs)

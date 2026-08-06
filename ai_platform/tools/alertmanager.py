@@ -16,7 +16,7 @@ routing/notification too) and is not available through this client.
 from typing import Dict, List, Any
 from enum import Enum
 
-from ai_platform.tools.prometheus_client import PrometheusClient
+from ai_platform.tools.prometheus_http_client import PrometheusClient
 
 
 class AlertSeverity(Enum):

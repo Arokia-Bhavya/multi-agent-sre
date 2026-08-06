@@ -8,7 +8,31 @@ from unittest.mock import MagicMock
 from ai_platform.tools.alertmanager import AlertmanagerClient, AlertSeverity
 from ai_platform.tools.jaeger_client import JaegerClient
 from ai_platform.tools.kubernetes_client import KubernetesClient
-from ai_platform.tools.prometheus_client import PrometheusClient
+from ai_platform.tools.prometheus_http_client import PrometheusClient, escape_label_value
+
+
+class EscapeLabelValueTests(TestCase):
+    def test_escapes_double_quotes(self):
+        self.assertEqual(escape_label_value('checkout"'), 'checkout\\"')
+
+    def test_escapes_backslashes(self):
+        self.assertEqual(escape_label_value("checkout\\"), "checkout\\\\")
+
+    def test_escapes_backslash_before_quote_so_it_cannot_unescape_the_quote(self):
+        # If backslashes were escaped *after* quotes, an attacker could send
+        # a literal backslash to neutralize the quote's escaping. Order
+        # matters: input is `a\"` (backslash, quote); correctly escaped that
+        # must become `a` + three backslashes + a quote, not just one.
+        self.assertEqual(escape_label_value('a\\"'), "a" + "\\" * 3 + '"')
+
+    def test_escapes_embedded_newline(self):
+        self.assertEqual(escape_label_value("a\nb"), "a\\nb")
+
+    def test_leaves_ordinary_service_name_unchanged(self):
+        self.assertEqual(escape_label_value("checkout"), "checkout")
+
+    def test_coerces_non_string_input(self):
+        self.assertEqual(escape_label_value(42), "42")
 
 
 class PrometheusClientTests(TestCase):
@@ -95,6 +119,37 @@ class KubernetesClientTests(TestCase):
             name="checkout", namespace="otel-demo", body={"spec": {"replicas": 1}}
         )
         self.assertEqual(result, {"name": "checkout", "namespace": "otel-demo", "replicas": 1})
+
+    def test_get_pod_logs_redacts_pii(self):
+        instance = KubernetesClient.__new__(KubernetesClient)
+        instance.v1 = MagicMock()
+        instance.v1.read_namespaced_pod_log.return_value = (
+            "ERROR failed to email receipt to jane.doe@example.com"
+        )
+
+        logs = instance.get_pod_logs("otel-demo", "checkout-abc")
+
+        self.assertNotIn("jane.doe@example.com", logs)
+        self.assertIn("[REDACTED_EMAIL]", logs)
+
+    def test_get_recent_events_redacts_message_field(self):
+        instance = KubernetesClient.__new__(KubernetesClient)
+        instance.v1 = MagicMock()
+        event = SimpleNamespace(
+            type="Warning",
+            reason="FailedMount",
+            message="secret volume mount failed for user jane.doe@example.com",
+            involved_object=SimpleNamespace(kind="Pod", name="checkout-abc"),
+            last_timestamp=None,
+            first_timestamp=None,
+            count=1,
+        )
+        instance.v1.list_namespaced_event.return_value = SimpleNamespace(items=[event])
+
+        events = instance.get_recent_events("otel-demo")
+
+        self.assertNotIn("jane.doe@example.com", events[0]["message"])
+        self.assertIn("[REDACTED_EMAIL]", events[0]["message"])
 
 
 class AlertmanagerClientTests(TestCase):

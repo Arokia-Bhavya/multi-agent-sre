@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 from ai_platform.tools.alertmanager import AlertmanagerClient
 from ai_platform.tools.jaeger_client import JaegerClient
 from ai_platform.tools.kubernetes_client import KubernetesClient
-from ai_platform.tools.prometheus_client import PrometheusClient
+from ai_platform.tools.prometheus_http_client import PrometheusClient
 
 from ai_platform.tools.alert_agent import AlertAgent
 from ai_platform.tools.kubernetes_agent import KubernetesAgent
@@ -46,6 +46,19 @@ class MetricsAgentTests(TestCase):
     def test_get_cpu_usage_returns_none_when_missing(self):
         self.prom.query = MagicMock(return_value=[])
         self.assertIsNone(self.agent.get_cpu_usage("checkout"))
+
+    def test_get_request_rate_escapes_promql_injection_in_service_name(self):
+        # A service_name containing a `"` should not be able to break out of
+        # the label matcher and inject extra PromQL — see prometheus_http_client.
+        # escape_label_value. Regression for the PromQL injection finding.
+        self.prom.query = MagicMock(return_value=_prom_result(1.0))
+        malicious = 'checkout"} or sum(rate(secret_metric[5m])) or vector(1'
+
+        self.agent.get_request_rate(malicious)
+
+        query = self.prom.query.call_args[0][0]
+        self.assertNotIn('checkout"} or', query)
+        self.assertIn('service_name="checkout\\"} or sum(rate(secret_metric[5m])) or vector(1"', query)
 
     def test_get_service_summary_combines_all_metrics(self):
         self.prom.query = MagicMock(return_value=_prom_result(1))

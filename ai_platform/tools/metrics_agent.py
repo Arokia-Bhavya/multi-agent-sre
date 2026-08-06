@@ -20,7 +20,7 @@ labels confirmed against the demo's Prometheus instance:
 """
 
 from typing import Dict, List, Any, Optional
-from ai_platform.tools.prometheus_client import PrometheusClient
+from ai_platform.tools.prometheus_http_client import PrometheusClient, escape_label_value
 
 
 class MetricsAgent:
@@ -46,7 +46,7 @@ class MetricsAgent:
         """
         query = (
             f'sum(rate(http_server_request_duration_seconds_count'
-            f'{{service_name="{service_name}"}}[{window}]))'
+            f'{{service_name="{escape_label_value(service_name)}"}}[{window}]))'
         )
         result = self.prom.query(query)
         return float(result[0]["value"][1]) if result else 0.0
@@ -56,13 +56,14 @@ class MetricsAgent:
         Fraction (0.0-1.0) of requests in the last `window` that returned a
         5xx status code for this service.
         """
+        escaped_service = escape_label_value(service_name)
         total_query = (
             f'sum(rate(http_server_request_duration_seconds_count'
-            f'{{service_name="{service_name}"}}[{window}]))'
+            f'{{service_name="{escaped_service}"}}[{window}]))'
         )
         error_query = (
             f'sum(rate(http_server_request_duration_seconds_count'
-            f'{{service_name="{service_name}", http_response_status_code=~"5.."}}[{window}]))'
+            f'{{service_name="{escaped_service}", http_response_status_code=~"5.."}}[{window}]))'
         )
 
         total_result = self.prom.query(total_query)
@@ -86,7 +87,7 @@ class MetricsAgent:
         query = (
             f'histogram_quantile({percentile}, '
             f'sum(rate(http_server_request_duration_seconds_bucket'
-            f'{{service_name="{service_name}"}}[{window}])) by (le))'
+            f'{{service_name="{escape_label_value(service_name)}"}}[{window}])) by (le))'
         )
         result = self.prom.query(query)
         if not result:
@@ -106,7 +107,7 @@ class MetricsAgent:
         query = (
             f'histogram_quantile({percentile}, '
             f'sum(rate(http_server_request_duration_seconds_bucket'
-            f'{{service_name="{service_name}"}}[{window}])) by (le, http_route))'
+            f'{{service_name="{escape_label_value(service_name)}"}}[{window}])) by (le, http_route))'
         )
         result = self.prom.query(query)
         latencies = {}
@@ -128,7 +129,7 @@ class MetricsAgent:
         """
         query = (
             f'sum(rate(container_cpu_usage_seconds_total'
-            f'{{container="{container_name}"}}[{window}]))'
+            f'{{container="{escape_label_value(container_name)}"}}[{window}]))'
         )
         result = self.prom.query(query)
         return float(result[0]["value"][1]) if result else None
@@ -137,7 +138,7 @@ class MetricsAgent:
         """
         Current memory usage in bytes for a container.
         """
-        query = f'container_memory_usage_bytes{{container="{container_name}"}}'
+        query = f'container_memory_usage_bytes{{container="{escape_label_value(container_name)}"}}'
         result = self.prom.query(query)
         return float(result[0]["value"][1]) if result else None
 

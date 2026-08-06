@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from statistics import mean, pstdev
 from typing import Any, Dict, List
 
-from ai_platform.tools.prometheus_client import PrometheusClient
+from ai_platform.tools.prometheus_http_client import PrometheusClient, escape_label_value
 
 
 class AnomalyDetector:
@@ -93,7 +93,7 @@ class AnomalyDetector:
 
     def detect_cpu_anomaly(self, container_name: str, lookback_minutes: int = 60) -> Dict[str, Any]:
         """Flag anomalous CPU utilization for a container vs. its own recent history."""
-        query = f'container_cpu_utilization_ratio{{container_name="{container_name}"}}'
+        query = f'container_cpu_utilization_ratio{{container_name="{escape_label_value(container_name)}"}}'
         result = self._detect_for_query(query, lookback_minutes)
         result["metric"] = "cpu_utilization"
         result["container_name"] = container_name
@@ -101,7 +101,7 @@ class AnomalyDetector:
 
     def detect_memory_anomaly(self, container_name: str, lookback_minutes: int = 60) -> Dict[str, Any]:
         """Flag anomalous memory usage for a container vs. its own recent history."""
-        query = f'container_memory_usage_total_bytes{{container_name="{container_name}"}}'
+        query = f'container_memory_usage_total_bytes{{container_name="{escape_label_value(container_name)}"}}'
         result = self._detect_for_query(query, lookback_minutes)
         result["metric"] = "memory_bytes"
         result["container_name"] = container_name
@@ -118,7 +118,7 @@ class AnomalyDetector:
         query = (
             f'histogram_quantile({percentile}, '
             f'sum(rate(http_server_request_duration_seconds_bucket'
-            f'{{service_name="{service_name}"}}[{window}])) by (le))'
+            f'{{service_name="{escape_label_value(service_name)}"}}[{window}])) by (le))'
         )
         result = self._detect_for_query(query, lookback_minutes)
         result["metric"] = "latency_seconds"
@@ -135,7 +135,7 @@ class AnomalyDetector:
         """
         query = (
             f'sum(rate(http_server_request_duration_seconds_count'
-            f'{{service_name="{service_name}"}}[{window}]))'
+            f'{{service_name="{escape_label_value(service_name)}"}}[{window}]))'
         )
         result = self._detect_for_query(query, lookback_minutes)
         result["metric"] = "request_rate_per_sec"

@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from ai_platform.tools.prometheus_client import PrometheusClient
+from ai_platform.tools.prometheus_http_client import PrometheusClient
 from ai_platform.tools.jaeger_client import JaegerClient
 from ai_platform.tools.kubernetes_client import KubernetesClient
 from ai_platform.tools.alertmanager import AlertmanagerClient

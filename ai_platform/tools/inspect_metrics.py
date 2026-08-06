@@ -5,7 +5,7 @@ around, so we use real label names instead of guessing.
 Run: python inspect_labels.py
 """
 
-from ai_platform.tools.prometheus_client import PrometheusClient
+from ai_platform.tools.prometheus_http_client import PrometheusClient
 
 METRICS_TO_INSPECT = [
     "http_server_request_duration_seconds_count",

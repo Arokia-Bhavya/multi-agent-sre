@@ -3,7 +3,7 @@
 from unittest import TestCase
 from unittest.mock import MagicMock
 
-from ai_platform.tools.prometheus_client import PrometheusClient
+from ai_platform.tools.prometheus_http_client import PrometheusClient
 from ai_platform.tools.anomaly_detector import AnomalyDetector
 
 

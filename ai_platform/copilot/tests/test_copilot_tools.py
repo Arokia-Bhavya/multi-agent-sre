@@ -63,6 +63,7 @@ class CopilotToolsTests(TestCase):
             "get_correlated_incidents",
             "get_incident_history",
             "search_similar_incidents",
+            "search_knowledge_base",
             "detect_service_anomalies",
             "investigate_service",
             "generate_runbook",
@@ -203,6 +204,21 @@ class CopilotToolsTests(TestCase):
 
     def test_search_similar_incidents_with_no_matches_returns_empty_list(self):
         result = self._invoke("search_similar_incidents", query="anything at all")
+
+        self.assertEqual(result, [])
+
+    def test_search_knowledge_base_finds_relevant_playbook(self):
+        result = self._invoke(
+            "search_knowledge_base", query="pod stuck in CrashLoopBackOff, no metrics reporting"
+        )
+
+        self.assertGreaterEqual(len(result), 1)
+        self.assertIn("title", result[0])
+        self.assertIn("similarity", result[0])
+        self.assertIn("content", result[0])
+
+    def test_search_knowledge_base_with_empty_query_returns_empty_list(self):
+        result = self._invoke("search_knowledge_base", query="")
 
         self.assertEqual(result, [])
 

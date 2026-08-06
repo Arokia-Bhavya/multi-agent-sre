@@ -51,7 +51,9 @@ history, catching unusual behavior even before a static alert threshold is cross
 get_incident_history (past auto-triaged incidents — RCA reports and outcomes — for \
 "what's happened with X recently"-style questions, distinct from current-state tools), and \
 search_similar_incidents (fuzzy keyword search over past RCA reports for "have we seen this \
-before" questions where the user describes symptoms rather than naming an exact service).
+before" questions where the user describes symptoms rather than naming an exact service), and \
+search_knowledge_base (search human-authored playbooks for known failure patterns, independent \
+of whether this platform has ever actually seen that exact incident before).
 
 Guidelines:
 - Prefer the narrow, cheap tools (get_service_metrics, get_slow_traces, get_pod_health, \
@@ -68,6 +70,11 @@ investigate_service or the other current-state tools, which only see live data.
 instead ("have we seen this error before?", "has something like this happened before?") — use \
 search_similar_incidents instead of get_incident_history, which needs a service/time filter to \
 be useful.
+- When asked for standard procedure, established guidance, or "is there a documented playbook" \
+for a failure pattern, use search_knowledge_base rather than search_similar_incidents — the \
+knowledge base holds human-authored playbooks that apply whether or not this platform has \
+actually seen the exact incident before, while search_similar_incidents only finds matches in \
+this platform's own auto-generated history.
 - Reach for investigate_service when the user asks a "why is X broken/slow/down" root-cause \
 question, or explicitly wants recommended next steps for an incident — it runs the full \
 Milestone 4 pipeline and already reasons over the evidence, so don't re-derive root cause \

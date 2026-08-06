@@ -31,6 +31,7 @@ from ai_platform.coordinator.graph import InvestigationGraph
 from ai_platform.coordinator.runbook import runbook_filename
 from ai_platform.tools.incident_store import IncidentStore
 from ai_platform.tools.incident_search import search_similar_incidents as _search_similar_incidents
+from ai_platform.tools.knowledge_base import search_knowledge_base as _search_knowledge_base
 
 
 # Runbooks get saved here so a generated remediation doc is a real file the
@@ -350,6 +351,43 @@ def build_copilot_tools(
 
     @tool
     @_catch_errors
+    def search_knowledge_base(query: str, top_k: int = 5) -> str:
+        """
+        Search human-authored playbooks/runbooks (knowledge_base/ at the
+        repo root) for established guidance on a known failure pattern —
+        e.g. "elevated 5xx error rate", "pod stuck in CrashLoopBackOff",
+        "container memory climbing toward OOM". Ranked by keyword/phrase
+        overlap (TF-IDF), so it's strongest when `query` shares actual
+        wording with a playbook.
+
+        Distinct from search_similar_incidents: that searches this
+        platform's own auto-generated history of what happened last time a
+        specific alert fired; this searches reference material written
+        once by a human that applies whether or not this exact incident
+        has ever fired before. Use this for "what's the standard procedure
+        for X" or "is there a documented playbook for this" questions, or
+        to ground a recommendation in established guidance rather than
+        only this platform's own limited incident history.
+
+        Args:
+            query: Free-text description of the failure pattern or symptom.
+            top_k: Max matches to return, ranked by similarity. An empty
+                result means no playbook covers this.
+        """
+        matches = _search_knowledge_base(query, top_k=top_k)
+        return _serialize(
+            [
+                {
+                    "title": match.doc.title,
+                    "similarity": round(match.similarity, 3),
+                    "content": match.doc.content,
+                }
+                for match in matches
+            ]
+        )
+
+    @tool
+    @_catch_errors
     def detect_service_anomalies(service_name: str, lookback_minutes: int = 60) -> str:
         """
         Run statistical anomaly detection (z-score vs. the service's own
@@ -496,6 +534,7 @@ def build_copilot_tools(
         get_correlated_incidents,
         get_incident_history,
         search_similar_incidents,
+        search_knowledge_base,
         detect_service_anomalies,
         investigate_service,
         generate_runbook,

@@ -43,6 +43,7 @@ from ai_platform.tools.trace_agent import TraceAgent
 from ai_platform.tools.kubernetes_agent import KubernetesAgent
 from ai_platform.tools.alert_agent import AlertAgent
 from ai_platform.tools.incident_store import IncidentStore, DEFAULT_DB_PATH
+from ai_platform.tools.env_hygiene import check_env_file_permissions
 
 from ai_platform.copilot.agent import SRECopilot, CopilotReply
 
@@ -112,6 +113,10 @@ def main():
     required_key = "GROQ_API_KEY" if provider == "groq" else "ANTHROPIC_API_KEY"
     if not os.getenv(required_key):
         print(f"!! LLM_PROVIDER={provider} but {required_key} is not set; the copilot will fail to respond.")
+
+    env_warning = check_env_file_permissions()
+    if env_warning:
+        print(env_warning)
 
     print("AI SRE Copilot — ask about metrics, traces, Kubernetes health, or active alerts.")
     print("Examples: 'Why is checkout slow?', 'Which service has the highest CPU usage?', "

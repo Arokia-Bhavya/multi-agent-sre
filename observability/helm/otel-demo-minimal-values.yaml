@@ -176,6 +176,14 @@ prometheus:
           webhook_configs:
             - url: "http://host.docker.internal:8000/api/webhook/alertmanager"
               send_resolved: true
+              # Machine auth for the one caller that can't do an OIDC browser
+              # redirect (see ai_platform/webui/server.py's `_require_auth`).
+              # Must match WEBUI_API_KEY in .env — Alertmanager sends it as
+              # `Authorization: Bearer <credentials>`, which server.py also
+              # accepts alongside X-API-Key.
+              http_config:
+                authorization:
+                  credentials: "test-api-key"
 
 components:
   kafka:

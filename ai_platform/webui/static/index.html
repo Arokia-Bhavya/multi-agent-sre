@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>AI SRE Copilot</title>
+<link rel="icon" type="image/png" href="/static/img/favicon.png">
 <style>
   :root {
     --bg: #0f1115;
@@ -24,47 +25,6 @@
     display: flex;
   }
   #app { display: flex; width: 100%; height: 100%; }
-  #dashboard {
-    width: 300px;
-    min-width: 300px;
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  #dashboard .dash-header {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  #dashboard .dash-header h2 { font-size: 13px; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-  #dashboard .refresh-btn {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    border-radius: 6px;
-    padding: 3px 8px;
-    font-size: 11px;
-    cursor: pointer;
-  }
-  #dashboard .refresh-btn:hover { color: var(--text); border-color: var(--muted); }
-  #alertList, #incidentList {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  #incidentsSection {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    border-top: 1px solid var(--border);
-  }
   .incident-card {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -74,7 +34,6 @@
     cursor: pointer;
   }
   .incident-card:hover { border-color: var(--accent); }
-  .incident-card.selected { border-color: var(--accent); }
   .incident-card.investigating { border-left-color: #d29922; }
   .incident-card.awaiting_approval { border-left-color: var(--danger); }
   .incident-card.completed { border-left-color: var(--ok); }
@@ -85,18 +44,6 @@
   .badge.completed { background: rgba(63,185,80,0.18); color: var(--ok); }
   .badge.error { background: rgba(229,83,75,0.18); color: var(--danger); }
   .badge.resolved { background: rgba(138,144,162,0.18); color: var(--muted); }
-  .alert-card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    border-left: 3px solid var(--muted);
-  }
-  .alert-card.firing { border-left-color: var(--danger); }
-  .alert-card.pending { border-left-color: #d29922; }
-  .alert-card.inactive { border-left-color: var(--ok); }
-  .alert-card .name { font-size: 13px; font-weight: 600; }
-  .alert-card .meta { font-size: 11px; color: var(--muted); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; }
   .badge {
     display: inline-block;
     font-size: 10px;
@@ -106,11 +53,6 @@
     border-radius: 999px;
     font-weight: 600;
   }
-  .badge.firing { background: rgba(229,83,75,0.18); color: var(--danger); }
-  .badge.pending { background: rgba(210,153,34,0.18); color: #d29922; }
-  .badge.inactive { background: rgba(63,185,80,0.18); color: var(--ok); }
-  .alert-card .summary { font-size: 12px; color: var(--text); margin-top: 6px; }
-  #alertList .empty, #alertList .error { color: var(--muted); font-size: 12px; padding: 10px; }
   #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   header {
     padding: 14px 20px;
@@ -118,9 +60,28 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 16px;
   }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  header .logo { height: 24px; width: auto; display: block; }
   header .thread { font-size: 12px; color: var(--muted); }
+  header .header-left { display: flex; align-items: center; gap: 18px; }
+  .tabs { display: flex; gap: 4px; }
+  .tab-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .tab-btn.active { color: var(--text); border-color: var(--accent); background: rgba(91,141,239,0.12); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .user-badge { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+  .user-badge img { width: 22px; height: 22px; border-radius: 50%; }
+  .signout-link { font-size: 12px; color: var(--muted); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+  .signout-link:hover { color: var(--text); border-color: var(--muted); }
   #chat {
     flex: 1;
     overflow-y: auto;
@@ -197,33 +158,122 @@
   .modal .approve { background: var(--ok); }
   .modal .reject { background: var(--danger); }
   .typing { color: var(--muted); font-size: 13px; font-style: italic; }
+
+  /* --- Incident Timeline view --- */
+  #timelineView {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px;
+    display: none;
+  }
+  #timelineView.active { display: block; }
+  #chat.hidden, #composer.hidden { display: none; }
+  .timeline-day {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin: 22px 0 10px;
+  }
+  .timeline-day:first-child { margin-top: 0; }
+  .timeline {
+    position: relative;
+    padding-left: 22px;
+    border-left: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .timeline-item {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+  }
+  .timeline-item:hover { border-color: var(--accent); }
+  .timeline-item::before {
+    content: "";
+    position: absolute;
+    left: -28px;
+    top: 14px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--muted);
+    border: 2px solid var(--bg);
+  }
+  .timeline-item.investigating::before { background: #d29922; }
+  .timeline-item.awaiting_approval::before { background: var(--danger); }
+  .timeline-item.completed::before { background: var(--ok); }
+  .timeline-item.error::before { background: var(--danger); }
+  .timeline-item.resolved::before { background: var(--muted); }
+  .timeline-item .row1 { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  .timeline-item .name { font-size: 13px; font-weight: 600; }
+  .timeline-item .time { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .timeline-item .meta { font-size: 11px; color: var(--muted); margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .timeline-empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+
+  /* --- Operations Hub view --- */
+  #opsHubView {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px;
+    display: none;
+    flex-direction: column;
+    gap: 18px;
+  }
+  #opsHubView.active { display: flex; }
+  .ops-toolbar { display: flex; align-items: center; justify-content: space-between; }
+  .ops-toolbar select {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+  .ops-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .ops-kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .ops-kpi .label { font-size: 12px; color: var(--muted); }
+  .ops-kpi .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .ops-kpi .value.danger { color: var(--danger); }
+  .ops-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .ops-panel .ops-panel-title { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .ops-chart { display: flex; align-items: flex-end; gap: 6px; height: 90px; }
+  .ops-chart .bar-wrap { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+  .ops-chart .bar-seg { width: 100%; }
+  .ops-chart .bar-seg.resolved { background: var(--ok); }
+  .ops-chart .bar-seg.investigating { background: #d29922; }
+  .ops-chart .bar-seg.awaiting_approval { background: var(--danger); }
+  .ops-chart .bar-seg.error { background: var(--danger); }
+  .ops-chart-label { font-size: 10px; color: var(--muted); text-align: center; margin-top: 4px; }
+  .ops-legend { display: flex; gap: 14px; margin-top: 10px; font-size: 11px; color: var(--muted); }
+  .ops-legend span { display: flex; align-items: center; gap: 5px; }
+  .ops-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
+  .ops-empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
 </style>
 </head>
 <body>
   <div id="app">
-    <aside id="dashboard">
-      <div class="dash-header">
-        <h2>Alerts</h2>
-        <button class="refresh-btn" id="refreshAlerts">Refresh</button>
-      </div>
-      <div id="alertList"><div class="empty">Loading…</div></div>
-
-      <div id="incidentsSection">
-        <div class="dash-header">
-          <h2>Auto-Investigated Incidents</h2>
-          <button class="refresh-btn" id="refreshIncidents">Refresh</button>
-        </div>
-        <div id="incidentList"><div class="empty">None yet.</div></div>
-      </div>
-    </aside>
-
     <div id="main">
       <header>
-        <h1>AI SRE Copilot</h1>
-        <span class="thread" id="threadLabel"></span>
+        <div class="header-left">
+          <h1><img class="logo" src="/static/img/logo.png" alt="">AI SRE Copilot</h1>
+          <div class="tabs">
+            <button class="tab-btn" id="tabChat" type="button">Chat</button>
+            <button class="tab-btn" id="tabTimeline" type="button">Timeline</button>
+            <button class="tab-btn active" id="tabOpsHub" type="button">Operations hub</button>
+          </div>
+          <span class="thread" id="threadLabel"></span>
+        </div>
+        <div class="header-right" id="userBadgeWrap"></div>
       </header>
-      <div id="chat"></div>
-      <div id="composer">
+      <div id="chat" class="hidden"></div>
+      <div id="timelineView"></div>
+      <div id="opsHubView" class="active"></div>
+      <div id="composer" class="hidden">
         <input id="input" type="text" placeholder="Why is checkout slow?" autofocus />
         <button id="send">Send</button>
       </div>
@@ -251,11 +301,64 @@ const sendBtn = document.getElementById("send");
 const overlay = document.getElementById("overlay");
 const actionDetails = document.getElementById("actionDetails");
 
+// --- API auth -----------------------------------------------------------
+// Human access now goes through Google OIDC (server.py's SessionMiddleware):
+// signing in at /login sets an httponly session cookie, which the browser
+// sends automatically on every same-origin request — no client-side secret
+// handling needed. If a request ever comes back 401 (session expired,
+// server restarted, cookie cleared), we bounce to /login to re-authenticate
+// rather than trying to recover in place.
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, { ...options, credentials: "same-origin" });
+  if (res.status === 401) {
+    window.location.href = "/login";
+    // Never resolves meaningfully once redirecting, but callers still
+    // `await` this — return the response so a caller mid-flight doesn't
+    // throw on `.json()` before the redirect takes effect.
+    return res;
+  }
+  return res;
+}
+
+const userBadgeWrap = document.getElementById("userBadgeWrap");
+
+async function loadMe() {
+  try {
+    const res = await fetch("/api/me", { credentials: "same-origin" });
+    if (!res.ok) {
+      window.location.href = "/login";
+      return;
+    }
+    const user = await res.json();
+    userBadgeWrap.innerHTML = "";
+    const badge = document.createElement("div");
+    badge.className = "user-badge";
+    if (user.picture) {
+      const img = document.createElement("img");
+      img.src = user.picture;
+      img.alt = "";
+      badge.appendChild(img);
+    }
+    const name = document.createElement("span");
+    name.textContent = user.name || user.email || "";
+    badge.appendChild(name);
+    const signOut = document.createElement("a");
+    signOut.className = "signout-link";
+    signOut.href = "/auth/logout";
+    signOut.textContent = "Sign out";
+    userBadgeWrap.append(badge, signOut);
+  } catch (err) {
+    window.location.href = "/login";
+  }
+}
+
 async function init() {
-  const res = await fetch("/api/session", { method: "POST" });
+  await loadMe();
+  const res = await apiFetch("/api/session", { method: "POST" });
   const data = await res.json();
   threadId = data.thread_id;
   document.getElementById("threadLabel").textContent = "session " + threadId.slice(0, 8);
+  showTab("opsHub"); // Operations Hub is the default landing tab
 }
 
 function addMessage(role, text, steps) {
@@ -295,13 +398,25 @@ function showTyping() {
 }
 
 function showApproval(action) {
+  // action.reason (and, less directly, service_name) can echo untrusted
+  // input — LLM-authored text, itself potentially shaped by attacker-
+  // supplied alert annotations from an unauthenticated webhook. Built with
+  // textContent, not innerHTML, so nothing in it can execute as markup.
   pendingAction = action;
-  actionDetails.innerHTML = `
-    <dt>Action</dt><dd>${action.action}</dd>
-    <dt>Service</dt><dd>${action.service_name}</dd>
-    <dt>Desired replicas</dt><dd>${action.desired_replicas}</dd>
-    <dt>Reason</dt><dd>${action.reason}</dd>
-  `;
+  actionDetails.innerHTML = "";
+  [
+    ["Action", action.action],
+    ["Service", action.service_name],
+    ["Desired replicas", action.desired_replicas],
+    ["Reason", action.reason],
+  ].forEach(([label, value]) => {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    actionDetails.appendChild(dt);
+    actionDetails.appendChild(dd);
+  });
   overlay.classList.add("show");
 }
 
@@ -322,7 +437,7 @@ async function sendMessage() {
 
   const typingEl = showTyping();
   try {
-    const res = await fetch("/api/chat", {
+    const res = await apiFetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thread_id: threadId, message: text }),
@@ -347,7 +462,7 @@ async function respondToApproval(approved) {
   overlay.classList.remove("show");
   const typingEl = showTyping();
   try {
-    const res = await fetch("/api/approve", {
+    const res = await apiFetch("/api/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thread_id: threadId, approved }),
@@ -370,89 +485,42 @@ document.getElementById("reject").addEventListener("click", () => respondToAppro
 sendBtn.addEventListener("click", sendMessage);
 inputEl.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
 
-const alertListEl = document.getElementById("alertList");
-const ALERT_ORDER = { firing: 0, pending: 1, inactive: 2 };
-
-async function loadAlerts() {
-  try {
-    const res = await fetch("/api/alerts");
-    if (!res.ok) throw new Error(res.statusText);
-    const rules = await res.json();
-    renderAlerts(rules);
-  } catch (err) {
-    alertListEl.innerHTML = `<div class="error">Couldn't load alerts: ${err.message}</div>`;
-  }
-}
-
-function renderAlerts(rules) {
-  if (!rules.length) {
-    alertListEl.innerHTML = '<div class="empty">No alert rules configured.</div>';
-    return;
-  }
-  const sorted = [...rules].sort(
-    (a, b) => (ALERT_ORDER[a.state] ?? 3) - (ALERT_ORDER[b.state] ?? 3)
-  );
-  alertListEl.innerHTML = "";
-  sorted.forEach(rule => {
-    const card = document.createElement("div");
-    card.className = "alert-card " + (rule.state || "inactive");
-    card.innerHTML = `
-      <div class="name">${rule.name}</div>
-      <div class="meta">
-        <span class="badge ${rule.state}">${rule.state}</span>
-        <span>${rule.service}</span>
-        <span>${rule.severity}</span>
-      </div>
-      ${rule.summary ? `<div class="summary">${rule.summary}</div>` : ""}
-    `;
-    alertListEl.appendChild(card);
-  });
-}
-
-document.getElementById("refreshAlerts").addEventListener("click", loadAlerts);
-loadAlerts();
-setInterval(loadAlerts, 15000);
-
 // --- Auto-triaged incidents (alerts the copilot picked up on its own via
-// the Alertmanager webhook, without a human asking first) ---
-const incidentListEl = document.getElementById("incidentList");
-let selectedFingerprint = null;
+// the Alertmanager webhook, without a human asking first). No dedicated
+// sidebar list anymore — Timeline and Operations Hub are the two places
+// that display them, both fed by the same /api/incidents poll below, so
+// there's one live copy of incident state instead of a third redundant one.
+let lastShownApprovalThreadId = null;
 
 async function loadIncidents() {
   try {
-    const res = await fetch("/api/incidents");
+    const res = await apiFetch("/api/incidents");
     if (!res.ok) throw new Error(res.statusText);
     const records = await res.json();
-    renderIncidents(records);
-  } catch (err) {
-    incidentListEl.innerHTML = `<div class="error">Couldn't load incidents: ${err.message}</div>`;
-  }
-}
+    renderTimeline(records);
 
-function renderIncidents(records) {
-  if (!records.length) {
-    incidentListEl.innerHTML = '<div class="empty">None yet.</div>';
-    return;
+    // Auto-surface the approval modal for a freshly awaiting-approval
+    // incident, even if the user hasn't clicked into it. Skip if a modal
+    // is already open, and dedupe so we don't re-pop the same thread after
+    // it's been approved/rejected while polling continues.
+    if (!overlay.classList.contains("show")) {
+      const awaiting = records.find(
+        (r) => r.status === "awaiting_approval" && r.pending_action && r.thread_id !== lastShownApprovalThreadId
+      );
+      if (awaiting) {
+        lastShownApprovalThreadId = awaiting.thread_id;
+        showTab("chat");
+        openIncident(awaiting);
+      }
+    }
+  } catch (err) {
+    if (timelineViewEl.classList.contains("active")) {
+      timelineViewEl.innerHTML = `<div class="timeline-empty">Couldn't load timeline: ${err.message}</div>`;
+    }
   }
-  incidentListEl.innerHTML = "";
-  records.forEach(record => {
-    const card = document.createElement("div");
-    card.className = "incident-card " + record.status + (record.fingerprint === selectedFingerprint ? " selected" : "");
-    card.innerHTML = `
-      <div class="name">${record.alert_name}</div>
-      <div class="meta">
-        <span class="badge ${record.status}">${record.status.replace("_", " ")}</span>
-        <span>${record.service || "unknown service"}</span>
-        <span>${record.severity}</span>
-      </div>
-    `;
-    card.addEventListener("click", () => openIncident(record));
-    incidentListEl.appendChild(card);
-  });
 }
 
 function openIncident(record) {
-  selectedFingerprint = record.fingerprint;
   threadId = record.thread_id;
   document.getElementById("threadLabel").textContent = "incident " + record.alert_name;
   chatEl.innerHTML = "";
@@ -467,12 +535,296 @@ function openIncident(record) {
   if (record.pending_action) {
     showApproval(record.pending_action);
   }
-  loadIncidents(); // refresh selected-card highlighting
 }
 
-document.getElementById("refreshIncidents").addEventListener("click", loadIncidents);
 loadIncidents();
 setInterval(loadIncidents, 5000);
+
+// --- Incident Timeline (dedicated tab, chronological view across every
+// auto-triaged incident, grouped by day and ordered oldest-to-newest within
+// each day so the sequence of an incident reads top-to-bottom the way it
+// happened) ---
+const chatEl2 = chatEl; // alias for clarity below where both panes are toggled
+const composerEl = document.getElementById("composer");
+const timelineViewEl = document.getElementById("timelineView");
+const opsHubViewEl = document.getElementById("opsHubView");
+const tabChatBtn = document.getElementById("tabChat");
+const tabTimelineBtn = document.getElementById("tabTimeline");
+const tabOpsHubBtn = document.getElementById("tabOpsHub");
+
+function showTab(tab) {
+  tabChatBtn.classList.toggle("active", tab === "chat");
+  tabTimelineBtn.classList.toggle("active", tab === "timeline");
+  tabOpsHubBtn.classList.toggle("active", tab === "opsHub");
+  chatEl.classList.toggle("hidden", tab !== "chat");
+  composerEl.classList.toggle("hidden", tab !== "chat");
+  timelineViewEl.classList.toggle("active", tab === "timeline");
+  opsHubViewEl.classList.toggle("active", tab === "opsHub");
+  if (tab === "timeline") loadIncidents();
+  if (tab === "opsHub") loadOpsHub();
+}
+
+tabChatBtn.addEventListener("click", () => showTab("chat"));
+tabTimelineBtn.addEventListener("click", () => showTab("timeline"));
+tabOpsHubBtn.addEventListener("click", () => showTab("opsHub"));
+
+function _dayLabel(iso) {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  } catch (err) {
+    return iso;
+  }
+}
+
+function _timeLabel(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  } catch (err) {
+    return "";
+  }
+}
+
+function renderTimeline(records) {
+  if (!timelineViewEl.classList.contains("active")) return; // avoid unnecessary DOM work off-tab
+  timelineViewEl.innerHTML = "";
+
+  if (!records.length) {
+    timelineViewEl.innerHTML = '<div class="timeline-empty">No incidents recorded yet — this fills in as Alertmanager alerts are auto-triaged.</div>';
+    return;
+  }
+
+  // Oldest-first overall, then grouped by calendar day, so each day's
+  // vertical timeline reads top (earliest) to bottom (latest) — matching
+  // how the incident actually unfolded.
+  const sorted = [...records].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const groups = [];
+  let currentDay = null;
+  let currentGroup = null;
+  sorted.forEach(record => {
+    const day = _dayLabel(record.created_at);
+    if (day !== currentDay) {
+      currentDay = day;
+      currentGroup = { day, records: [] };
+      groups.push(currentGroup);
+    }
+    currentGroup.records.push(record);
+  });
+
+  groups.forEach(group => {
+    const heading = document.createElement("div");
+    heading.className = "timeline-day";
+    heading.textContent = group.day;
+    timelineViewEl.appendChild(heading);
+
+    const line = document.createElement("div");
+    line.className = "timeline";
+    group.records.forEach(record => {
+      // Same untrusted-input caveat as renderIncidents: alert_name/service
+      // trace back to an Alertmanager payload, so this is built with
+      // textContent, never innerHTML.
+      const item = document.createElement("div");
+      item.className = "timeline-item " + record.status;
+
+      const row1 = document.createElement("div");
+      row1.className = "row1";
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = record.alert_name;
+      const time = document.createElement("span");
+      time.className = "time";
+      time.textContent = _timeLabel(record.created_at);
+      row1.append(name, time);
+      item.appendChild(row1);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const statusBadge = document.createElement("span");
+      statusBadge.className = "badge " + record.status;
+      statusBadge.textContent = record.status.replace("_", " ");
+      const serviceSpan = document.createElement("span");
+      serviceSpan.textContent = record.service || "unknown service";
+      const severitySpan = document.createElement("span");
+      severitySpan.textContent = record.severity;
+      meta.append(statusBadge, serviceSpan, severitySpan);
+      item.appendChild(meta);
+
+      item.addEventListener("click", () => {
+        openIncident(record);
+        showTab("chat");
+      });
+      line.appendChild(item);
+    });
+    timelineViewEl.appendChild(line);
+  });
+}
+
+// --- Operations Hub (KPI dashboard over the same /api/incidents data,
+// aggregated server-side by /api/operations-hub so the math lives in one
+// place rather than being duplicated in JS) ---
+let opsHubRangeDays = 7;
+
+function _formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return "—";
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem ? `${hours}h ${rem}m` : `${hours}h`;
+}
+
+function _formatPct(fraction) {
+  return `${Math.round(fraction * 100)}%`;
+}
+
+async function loadOpsHub() {
+  opsHubViewEl.innerHTML = '<div class="ops-empty">Loading…</div>';
+  try {
+    const res = await apiFetch(`/api/operations-hub?range_days=${opsHubRangeDays}`);
+    if (!res.ok) throw new Error(res.statusText);
+    const data = await res.json();
+    renderOpsHub(data);
+  } catch (err) {
+    opsHubViewEl.innerHTML = `<div class="ops-empty">Couldn't load operations hub: ${err.message}</div>`;
+  }
+}
+
+function renderOpsHub(data) {
+  opsHubViewEl.innerHTML = "";
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "ops-toolbar";
+  const spacer = document.createElement("div");
+  const select = document.createElement("select");
+  [7, 14, 30].forEach(days => {
+    const opt = document.createElement("option");
+    opt.value = days;
+    opt.textContent = `Last ${days} days`;
+    if (days === opsHubRangeDays) opt.selected = true;
+    select.appendChild(opt);
+  });
+  select.addEventListener("change", () => {
+    opsHubRangeDays = parseInt(select.value, 10);
+    loadOpsHub();
+  });
+  toolbar.append(spacer, select);
+  opsHubViewEl.appendChild(toolbar);
+
+  const kpis = document.createElement("div");
+  kpis.className = "ops-kpis";
+  [
+    ["Incidents", data.total_incidents, false],
+    ["Resolution rate", _formatPct(data.resolution_rate), false],
+    ["Median time to mitigate", _formatDuration(data.median_time_to_mitigate_seconds), false],
+    ["Pending approvals", data.pending_approvals, data.pending_approvals > 0],
+  ].forEach(([label, value, danger]) => {
+    const card = document.createElement("div");
+    card.className = "ops-kpi";
+    const l = document.createElement("div");
+    l.className = "label";
+    l.textContent = label;
+    const v = document.createElement("div");
+    v.className = "value" + (danger ? " danger" : "");
+    v.textContent = value;
+    card.append(l, v);
+    kpis.appendChild(card);
+  });
+  opsHubViewEl.appendChild(kpis);
+
+  const chartPanel = document.createElement("div");
+  chartPanel.className = "ops-panel";
+  const chartTitle = document.createElement("div");
+  chartTitle.className = "ops-panel-title";
+  chartTitle.textContent = "Incident volume and outcomes";
+  chartPanel.appendChild(chartTitle);
+
+  const maxTotal = Math.max(1, ...data.daily.map(d => d.resolved + d.investigating + d.awaiting_approval + d.error));
+  const chart = document.createElement("div");
+  chart.className = "ops-chart";
+  data.daily.forEach(day => {
+    const total = day.resolved + day.investigating + day.awaiting_approval + day.error;
+    const wrap = document.createElement("div");
+    wrap.className = "bar-wrap";
+    wrap.title = `${day.date}: ${total} incident${total === 1 ? "" : "s"}`;
+    if (total === 0) {
+      const seg = document.createElement("div");
+      seg.className = "bar-seg";
+      seg.style.height = "2px";
+      seg.style.background = "var(--border)";
+      wrap.appendChild(seg);
+    } else {
+      [["resolved", day.resolved], ["investigating", day.investigating], ["awaiting_approval", day.awaiting_approval], ["error", day.error]]
+        .filter(([, count]) => count > 0)
+        .forEach(([status, count]) => {
+          const seg = document.createElement("div");
+          seg.className = "bar-seg " + status;
+          seg.style.height = `${(count / maxTotal) * 100}%`;
+          wrap.appendChild(seg);
+        });
+    }
+    chart.appendChild(wrap);
+  });
+  chartPanel.appendChild(chart);
+
+  const legend = document.createElement("div");
+  legend.className = "ops-legend";
+  [["resolved", "var(--ok)", "Resolved"], ["investigating", "#d29922", "In progress"], ["awaiting_approval", "var(--danger)", "Awaiting approval"]]
+    .forEach(([, color, label]) => {
+      const span = document.createElement("span");
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.background = color;
+      const text = document.createElement("span");
+      text.textContent = label;
+      span.append(dot, text);
+      legend.appendChild(span);
+    });
+  chartPanel.appendChild(legend);
+  opsHubViewEl.appendChild(chartPanel);
+
+  const recentPanel = document.createElement("div");
+  recentPanel.className = "ops-panel";
+  const recentTitle = document.createElement("div");
+  recentTitle.className = "ops-panel-title";
+  recentTitle.textContent = "Recent incidents";
+  recentPanel.appendChild(recentTitle);
+
+  if (!data.recent.length) {
+    const empty = document.createElement("div");
+    empty.className = "ops-empty";
+    empty.textContent = "No incidents in this range.";
+    recentPanel.appendChild(empty);
+  } else {
+    data.recent.forEach(record => {
+      // Same untrusted-input caveat as renderIncidents/renderTimeline —
+      // built with textContent, never innerHTML.
+      const card = document.createElement("div");
+      card.className = "incident-card " + record.status;
+      card.style.marginBottom = "8px";
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = record.alert_name;
+      card.appendChild(name);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const statusBadge = document.createElement("span");
+      statusBadge.className = "badge " + record.status;
+      statusBadge.textContent = record.status.replace("_", " ");
+      const serviceSpan = document.createElement("span");
+      serviceSpan.textContent = record.service || "unknown service";
+      meta.append(statusBadge, serviceSpan);
+      card.appendChild(meta);
+
+      card.addEventListener("click", () => {
+        openIncident(record);
+        showTab("chat");
+      });
+      recentPanel.appendChild(card);
+    });
+  }
+  opsHubViewEl.appendChild(recentPanel);
+}
 
 init();
 </script>

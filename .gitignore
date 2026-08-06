@@ -14,11 +14,6 @@ __pycache__/
 .env
 
 # Local runtime artifacts
-# NOTE: both ai-platform/ and ai_platform/ entries kept until Phase 3 of the
-# branch merge (the ai-platform -> ai_platform rename) actually lands here.
-ai-platform/runbooks/
-ai-platform/webui/incidents.db
-ai-platform/webui/incidents_test.db
 ai_platform/runbooks/
 ai_platform/webui/incidents.db
 ai_platform/webui/incidents_test.db

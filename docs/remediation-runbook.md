@@ -8,7 +8,7 @@ Before this, it's worth running the offline demo first (no cluster needed) to
 see the approval mechanics in isolation:
 
 ```bash
-uv run python ai-platform/copilot/sample_remediation_demo.py
+uv run python ai_platform/copilot/sample_remediation_demo.py
 ```
 
 (Run from the repo root. The script puts the directories it needs on
@@ -60,7 +60,7 @@ regardless of whether a named Prometheus alert fires yet.
 Quick sanity check with the existing Milestone 2/3 tooling before involving
 the copilot:
 ```
-uv run python ai-platform/tools/test_clients.py
+uv run python ai_platform/tools/test_clients.py
 ```
 Look for `checkout` under the Kubernetes section with `ready_replicas: 0`.
 
@@ -72,7 +72,7 @@ curl -s http://localhost:9090/api/v1/alerts | python3 -m json.tool
 ## 3. Ask the copilot to investigate and fix it
 
 ```
-uv run python ai-platform/copilot/chat.py
+uv run python ai_platform/copilot/chat.py
 ```
 
 Try:
@@ -139,7 +139,7 @@ kubectl scale deployment checkout --replicas=1 -n otel-demo
 - **The approval gate is real, not cosmetic.** It's implemented with
   LangGraph's `interrupt()`, which actually pauses graph execution — the
   cluster-mutating code path is unreachable until `respond_to_approval(True, ...)`
-  is called. See `ai-platform/copilot/copilot_tools.py::remediate_scale_deployment`
+  is called. See `ai_platform/copilot/copilot_tools.py::remediate_scale_deployment`
   and `agent.py::SRECopilot.respond_to_approval`.
 - **The named Prometheus alerts** (`FrontendHighErrorRate`,
   `FrontendHighLatency`, `FrontendHighMemoryUsage`) are all scoped to the

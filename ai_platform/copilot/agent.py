@@ -124,6 +124,31 @@ def _build_llm(llm: Optional[Any] = None) -> Any:
         return ChatAnthropic(model=model)
 
 
+def _extract_text(content: Any) -> str:
+    """
+    Normalize a LangChain message's `.content` to plain text.
+
+    For plain-text-only turns this is already a `str`. But Anthropic models
+    can return `.content` as a list of content blocks (e.g. `{"type": "text",
+    "text": "..."}`, possibly alongside `thinking`/`tool_use` blocks) even on
+    the final message of a turn. Passed straight through to `CopilotReply`,
+    that list renders in the web UI as "[object Object],[object Object]"
+    (JS's default `Array.toString()`), so pull just the text blocks out and
+    join them.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "".join(parts)
+    return str(content) if content is not None else ""
+
+
 @dataclass(frozen=True)
 class CopilotReply:
     """
@@ -325,7 +350,7 @@ class SRECopilot:
         pending = result.get("__interrupt__") if result else None
         if pending:
             return CopilotReply(content="", pending_action=pending[0].value, steps=steps)
-        return CopilotReply(content=result["messages"][-1].content, steps=steps)
+        return CopilotReply(content=_extract_text(result["messages"][-1].content), steps=steps)
 
     @staticmethod
     def _announce(msg: Any) -> List[Dict[str, Any]]:

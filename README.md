@@ -7,7 +7,7 @@ Alerts fire → the platform investigates them autonomously → it produces a
 grounded RCA and an execution-ready remediation runbook → a human approves
 any change that touches the cluster.
 
-**Demo video:** [(https://lnkd.in/p/g6afVVEE)]
+**Demo video:** https://lnkd.in/p/g6afVVEE
 
 ## Stack
 

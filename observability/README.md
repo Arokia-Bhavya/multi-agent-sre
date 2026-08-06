@@ -15,10 +15,8 @@ OpenTelemetry Collector          (bundled in the demo chart)
  ▼              ▼
 Prometheus    Jaeger             (bundled in the demo chart, ns: otel-demo)
  │
- ├──────► Grafana                (kube-prometheus-stack, ns: monitoring)
- │
  └──────► Alertmanager ──────► SRE Copilot webhook
-                                (ns: monitoring)      (/api/webhook/alertmanager)
+                                (ns: otel-demo)        (/api/webhook/alertmanager)
 ```
 
 The AI platform queries Prometheus and Jaeger to perform automated incident
@@ -29,11 +27,11 @@ copilot's webhook so incidents are triaged without a human noticing them first.
 
 | File | Purpose |
 | --- | --- |
-| `helm/otel-demo-minimal-values.yaml` | Demo app install. Disables `kafka`, `opensearch`, `postgresql`, and `llm` (which overcommit a local Kind node), and defines the application alert rules: `FrontendHighErrorRate`, `FrontendHighLatency`, `FrontendHighMemoryUsage`, `ProductCatalogPodDown`. |
-| `helm/kube-prometheus-values.yaml` | `kube-prometheus-stack` install. Provides Grafana and Alertmanager, and routes every firing/resolved alert to the copilot's auto-triage webhook. |
+| `helm/otel-demo-minimal-values.yaml` | Demo app install. Disables `kafka`, `opensearch`, `postgresql`, and `llm` (which overcommit a local Kind node), defines the application alert rules (`FrontendHighErrorRate`, `FrontendHighLatency`, `FrontendHighMemoryUsage`, `FrontendPodDown`, `ProductCatalogPodDown`), and enables the chart's own Alertmanager subchart, routing every firing/resolved alert to the copilot's auto-triage webhook. |
 
-The demo chart bundles its own Prometheus, Jaeger, and OpenTelemetry Collector
-in the `otel-demo` namespace, so no separate install is needed for those.
+The demo chart bundles its own Prometheus, Jaeger, Alertmanager, and
+OpenTelemetry Collector in the `otel-demo` namespace, so no separate install
+is needed for those.
 
 ## Install
 
@@ -41,11 +39,6 @@ in the `otel-demo` namespace, so no separate install is needed for those.
 helm install otel-demo open-telemetry/opentelemetry-demo \
   --namespace otel-demo --create-namespace \
   --values helm/otel-demo-minimal-values.yaml
-
-helm upgrade --install monitoring \
-  prometheus-community/kube-prometheus-stack \
-  -n monitoring --create-namespace \
-  --values helm/kube-prometheus-values.yaml
 ```
 
 > The demo chart does not support in-place upgrades between versions. Alert

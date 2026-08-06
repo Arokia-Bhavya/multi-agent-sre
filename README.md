@@ -9,9 +9,24 @@ any change that touches the cluster.
 
 **Demo video:** [add link here]
 
-**Stack:** OpenTelemetry Demo (Astronomy Shop) · Kubernetes (Kind) ·
-Prometheus / Alertmanager / Grafana · Jaeger + OpenTelemetry Collector ·
-Python 3.14, LangGraph, FastAPI
+## Stack
+
+| Layer | Technology |
+| --- | --- |
+| Language / runtime | Python 3.14 (pinned via `.python-version`), managed with [uv](https://docs.astral.sh/uv/) |
+| Agent orchestration | LangGraph (ReAct agent + investigation graph), LangChain core |
+| LLM providers | Anthropic Claude (`langchain-anthropic`), Groq (`langchain-groq`) |
+| Web backend | FastAPI, Uvicorn |
+| Auth | Google OIDC (`authlib`), signed session cookies (`itsdangerous`) |
+| Incident search / anomaly detection | scikit-learn (TF-IDF + cosine similarity, z-score) |
+| Data validation | Pydantic |
+| Persistence | SQLite (`IncidentStore`) |
+| Kubernetes client | `kubernetes` (official Python client) |
+| Testing | pytest, httpx (`TestClient`) |
+| Target workload | OpenTelemetry Demo (Astronomy Shop) |
+| Cluster | Kubernetes via Kind |
+| Observability stack | Prometheus, Alertmanager, Grafana, Jaeger, OpenTelemetry Collector (all bundled by the otel-demo Helm chart) |
+| Deployment | Docker, Helm 3.14+ |
 
 ---
 
